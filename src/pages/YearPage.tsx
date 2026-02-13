@@ -3,12 +3,6 @@ import { Link, Navigate, useParams } from 'react-router-dom'
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
-type MonthData = {
-  label: string
-  monthIndex: number
-  weeks: Date[][]
-}
-
 function formatDateKey(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
@@ -31,9 +25,9 @@ function endOfWeekMonday(date: Date): Date {
   return addDays(date, 6 - dayIndex)
 }
 
-function buildMonthWeeks(year: number, monthIndex: number): Date[][] {
-  const start = startOfWeekMonday(new Date(year, monthIndex, 1))
-  const end = endOfWeekMonday(new Date(year, monthIndex + 1, 0))
+function buildYearWeeks(year: number): Date[][] {
+  const start = startOfWeekMonday(new Date(year, 0, 1))
+  const end = endOfWeekMonday(new Date(year, 11, 31))
   const weeks: Date[][] = []
   let cursor = start
 
@@ -49,17 +43,14 @@ function buildMonthWeeks(year: number, monthIndex: number): Date[][] {
   return weeks
 }
 
-function buildYearData(year: number): MonthData[] {
-  return Array.from({ length: 12 }, (_, monthIndex) => {
-    const label = new Intl.DateTimeFormat(undefined, { month: 'long' }).format(
-      new Date(year, monthIndex, 1),
-    )
-    return {
-      label,
-      monthIndex,
-      weeks: buildMonthWeeks(year, monthIndex),
-    }
-  })
+function buildMonthStartLabels(year: number): Record<string, string> {
+  const monthFormatter = new Intl.DateTimeFormat(undefined, { month: 'long' })
+  return Object.fromEntries(
+    Array.from({ length: 12 }, (_, monthIndex) => {
+      const monthStart = new Date(year, monthIndex, 1)
+      return [formatDateKey(monthStart), monthFormatter.format(monthStart)]
+    }),
+  )
 }
 
 function isValidYear(value: number): boolean {
@@ -77,7 +68,8 @@ export function YearPage() {
     return <Navigate replace to={`/year/${currentYear}`} />
   }
 
-  const months = buildYearData(parsedYear)
+  const weeks = buildYearWeeks(parsedYear)
+  const monthStartLabels = buildMonthStartLabels(parsedYear)
   const previousYear = parsedYear > 1 ? parsedYear - 1 : 1
   const nextYear = parsedYear < 9999 ? parsedYear + 1 : 9999
 
@@ -125,71 +117,74 @@ export function YearPage() {
 
         <section className="overflow-x-auto rounded-3xl border border-slate-300/80 bg-white/75 shadow-xl backdrop-blur">
           <div className="min-w-[920px]">
-            <div className="grid grid-cols-[140px,1fr] border-b border-slate-300 bg-slate-100/80 md:grid-cols-[190px,1fr]">
-              <div className="border-r border-slate-300 px-4 py-3 font-display text-xs uppercase tracking-[0.18em] text-slate-500">
-                Month
-              </div>
-              <div className="grid grid-cols-7">
-                {WEEKDAYS.map((weekday, index) => (
-                  <div
-                    className={`px-2 py-3 text-center font-display text-sm text-slate-700 ${
-                      index >= 5 ? 'bg-slate-200/70' : ''
-                    }`}
-                    key={weekday}
-                  >
-                    {weekday}
-                  </div>
-                ))}
-              </div>
+            <div className="grid grid-cols-7 border-b border-slate-300 bg-slate-100/80">
+              {WEEKDAYS.map((weekday, index) => (
+                <div
+                  className={`px-2 py-3 text-center font-display text-sm text-slate-700 ${
+                    index >= 5 ? 'bg-slate-200/70' : ''
+                  }`}
+                  key={weekday}
+                >
+                  {weekday}
+                </div>
+              ))}
             </div>
 
-            {months.map((month) => (
-              <section
-                className="grid grid-cols-[140px,1fr] border-b border-slate-300 last:border-b-0 md:grid-cols-[190px,1fr]"
-                key={`${parsedYear}-${month.monthIndex}`}
-              >
-                <aside className="flex items-start border-r border-slate-300 bg-slate-100/85 px-4 py-4">
-                  <h2 className="font-display text-2xl text-slate-900">
-                    {month.label}
-                  </h2>
-                </aside>
+            <div className="divide-y divide-slate-200">
+              {weeks.map((week, weekIndex) => {
+                const monthStartIndex = week.findIndex((date) => {
+                  const cellKey = formatDateKey(date)
+                  return Boolean(monthStartLabels[cellKey])
+                })
+                const hasHorizontalMonthDivider = monthStartIndex === 0
 
-                <div className="divide-y divide-slate-200">
-                  {month.weeks.map((week, weekIndex) => (
-                    <div className="grid grid-cols-7" key={`${month.label}-${weekIndex}`}>
-                      {week.map((date, dayIndex) => {
-                        const isCurrentMonth =
-                          date.getFullYear() === parsedYear &&
-                          date.getMonth() === month.monthIndex
-                        const cellKey = formatDateKey(date)
-                        const isToday = cellKey === todayKey
+                return (
+                  <div
+                    className={`grid grid-cols-7 ${
+                      hasHorizontalMonthDivider ? 'border-t-4 border-t-slate-700' : ''
+                    }`}
+                    key={`${parsedYear}-week-${weekIndex}`}
+                  >
+                    {week.map((date, dayIndex) => {
+                      const cellKey = formatDateKey(date)
+                      const isCurrentYear = date.getFullYear() === parsedYear
+                      const isToday = cellKey === todayKey
+                      const monthLabel = monthStartLabels[cellKey]
+                      const isMonthStart = Boolean(monthLabel)
+                      const hasVerticalMonthDivider = isMonthStart && dayIndex > 0
 
-                        return (
-                          <div
-                            className={`min-h-[72px] border-l border-slate-200 px-3 py-2 transition ${
-                              dayIndex === 0 ? 'border-l-0' : ''
-                            } ${dayIndex >= 5 ? 'bg-slate-100/55' : 'bg-white/65'} ${
-                              isCurrentMonth ? 'text-slate-800' : 'invisible'
-                            }`}
-                            key={cellKey}
-                          >
-                            <span
-                              className={`inline-flex h-8 min-w-8 items-center justify-center rounded-full px-2 text-base ${
-                                isToday
-                                  ? 'font-display border border-slate-900 bg-slate-900 text-white'
-                                  : ''
-                              }`}
-                            >
-                              {date.getDate()}
+                      return (
+                        <div
+                          className={`relative min-h-[78px] border-l border-slate-200 px-3 py-2 transition ${
+                            dayIndex === 0 ? 'border-l-0' : ''
+                          } ${dayIndex >= 5 ? 'bg-slate-100/55' : 'bg-white/65'} ${
+                            isCurrentYear ? 'text-slate-800' : 'text-slate-400'
+                          } ${hasVerticalMonthDivider ? 'border-l-4 border-l-slate-700' : ''}`}
+                          key={cellKey}
+                        >
+                          {isMonthStart ? (
+                            <span className="font-display absolute left-2 top-1 text-[11px] uppercase tracking-[0.12em] text-slate-500">
+                              {monthLabel}
                             </span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ))}
+                          ) : null}
+                          <span
+                            className={`inline-flex h-8 min-w-8 items-center justify-center rounded-full px-2 text-base ${
+                              isMonthStart ? 'mt-4' : ''
+                            } ${
+                              isToday
+                                ? 'font-display border border-slate-900 bg-slate-900 text-white'
+                                : ''
+                            }`}
+                          >
+                            {date.getDate()}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })}
+            </div>
           </div>
         </section>
       </main>
