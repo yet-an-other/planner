@@ -149,7 +149,7 @@ export function YearPage() {
                 key={`${parsedYear}-${month.monthIndex}`}
               >
                 <aside className="flex items-start border-r border-slate-300 bg-slate-100/85 px-4 py-4">
-                  <h2 className="font-display text-2xl text-slate-900">
+                  <h2 className="font-display text-2xl font-bold text-slate-900">
                     {month.label}
                   </h2>
                 </aside>
