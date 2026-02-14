@@ -47,21 +47,26 @@ function buildYearWeeks(year: number): Date[][] {
   return weeks
 }
 
-function buildMonthStartLabels(year: number): Record<string, MonthStartLabel> {
+function buildMonthStartLabels(weeks: Date[][]): Record<string, MonthStartLabel> {
   const monthFormatter = new Intl.DateTimeFormat(undefined, { month: 'long' })
   const monthShortFormatter = new Intl.DateTimeFormat(undefined, { month: 'short' })
-  return Object.fromEntries(
-    Array.from({ length: 12 }, (_, monthIndex) => {
-      const monthStart = new Date(year, monthIndex, 1)
-      return [
-        formatDateKey(monthStart),
-        {
-          full: monthFormatter.format(monthStart),
-          short: monthShortFormatter.format(monthStart),
-        },
-      ]
-    }),
-  )
+  const labels: Record<string, MonthStartLabel> = {}
+
+  for (const week of weeks) {
+    for (const date of week) {
+      if (date.getDate() !== 1) {
+        continue
+      }
+
+      const key = formatDateKey(date)
+      labels[key] = {
+        full: monthFormatter.format(date),
+        short: monthShortFormatter.format(date),
+      }
+    }
+  }
+
+  return labels
 }
 
 function isValidYear(value: number): boolean {
@@ -80,7 +85,7 @@ export function YearPage() {
   }
 
   const weeks = buildYearWeeks(parsedYear)
-  const monthStartLabels = buildMonthStartLabels(parsedYear)
+  const monthStartLabels = buildMonthStartLabels(weeks)
   const previousYear = parsedYear > 1 ? parsedYear - 1 : 1
   const nextYear = parsedYear < 9999 ? parsedYear + 1 : 9999
 
@@ -89,8 +94,8 @@ export function YearPage() {
       <div className="pointer-events-none absolute -left-20 top-12 h-64 w-64 rounded-full bg-sky-200/70 blur-3xl" />
       <div className="pointer-events-none absolute right-0 top-1/2 h-72 w-72 rounded-full bg-cyan-100/80 blur-3xl" />
 
-      <main className="mx-auto max-w-[1360px] px-2 pb-10 pt-6 sm:px-4 sm:pb-12 sm:pt-8 md:px-8">
-        <header className="mb-4 flex flex-wrap items-center justify-between gap-3 sm:mb-6 sm:gap-4">
+      <main className="flex h-[100dvh] w-full flex-col pt-4 sm:pt-6">
+        <header className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-3 px-2 sm:mb-4 sm:gap-4 sm:px-4 md:px-8">
           <div>
             <p className="font-display text-[10px] uppercase tracking-[0.18em] text-slate-500 sm:text-sm sm:tracking-[0.22em]">
               The Planner
@@ -126,9 +131,9 @@ export function YearPage() {
           </div>
         </header>
 
-        <section className="overflow-hidden rounded-xl border border-slate-300/80 bg-white/75 shadow-xl backdrop-blur sm:rounded-3xl">
-          <div>
-            <div className="grid grid-cols-7 border-b border-slate-300 bg-slate-100/80">
+        <section className="flex min-h-0 w-full flex-1 flex-col overflow-hidden">
+          <div className="min-h-0 overflow-y-auto">
+            <div className="sticky top-0 z-10 grid grid-cols-7 border-b border-slate-300 bg-slate-100/95 backdrop-blur">
               {WEEKDAYS.map((weekday, index) => (
                 <div
                   className={`px-1 py-2 text-center font-display text-[11px] text-slate-700 sm:px-2 sm:py-3 sm:text-sm ${
@@ -173,7 +178,7 @@ export function YearPage() {
 
                       return (
                         <div
-                          className={`relative min-h-[48px] px-1 py-1 transition sm:min-h-[78px] sm:px-3 sm:py-2 ${leftBorderClass} ${
+                          className={`relative min-h-[58px] px-1 py-1 transition sm:min-h-[114px] sm:px-3 sm:py-2 ${leftBorderClass} ${
                             dayIndex >= 5 ? 'bg-slate-100/55' : 'bg-white/65'
                           } ${
                             isCurrentYear ? 'text-slate-800' : 'text-slate-400'

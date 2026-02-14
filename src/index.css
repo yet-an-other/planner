@@ -70,9 +70,9 @@
     @apply bg-background text-foreground antialiased;
     font-family: var(--font-body);
     background-image:
-      radial-gradient(circle at 10% 18%, rgba(186, 230, 253, 0.48), transparent 34%),
-      radial-gradient(circle at 86% 45%, rgba(220, 252, 231, 0.42), transparent 38%),
-      linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+      radial-gradient(circle at 10% 18%, rgba(208, 223, 159, 0.48), transparent 34%),
+      radial-gradient(circle at 86% 45%, rgba(196, 214, 150, 0.42), transparent 38%),
+      linear-gradient(180deg, #f8f9f2 0%, #edf0e4 100%);
     background-attachment: fixed;
   }
 }
