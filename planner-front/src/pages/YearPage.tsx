@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { Link, Navigate, useParams } from 'react-router-dom'
+import { ChevronLeft, ChevronRight, CircleUserRound, LogOut } from 'lucide-react'
+import { Link, Navigate, useLocation, useParams } from 'react-router-dom'
+import { useGoogleAuth } from '../lib/google/useGoogleAuth'
 import { useYearEvents } from './useYearEvents'
 import {
   MAX_VISIBLE_TIMED,
@@ -18,12 +19,14 @@ export function YearPage() {
   const now = new Date()
   const todayKey = formatDateKey(now)
   const currentYear = now.getFullYear()
+  const location = useLocation()
   const { year: yearParam } = useParams()
   const parsedYear = Number(yearParam)
   const hasValidYear = isValidYear(parsedYear)
   const calendarYear = hasValidYear ? parsedYear : currentYear
 
-  const { events, loading, fetchError } = useYearEvents()
+  const { authError, profile, session, signIn, signOut, status } = useGoogleAuth()
+  const { events, loading, fetchError } = useYearEvents(calendarYear, session)
 
   const weeks = useMemo(() => buildYearWeeks(calendarYear), [calendarYear])
   const monthStartLabels = useMemo(() => buildMonthStartLabels(weeks), [weeks])
@@ -34,6 +37,7 @@ export function YearPage() {
 
   const previousYear = calendarYear > 1 ? calendarYear - 1 : 1
   const nextYear = calendarYear < 9999 ? calendarYear + 1 : 9999
+  const userLabel = profile?.name ?? profile?.email ?? 'Google account'
 
   if (!hasValidYear) {
     return <Navigate replace to={`/year/${currentYear}`} />
@@ -55,32 +59,82 @@ export function YearPage() {
             </h1>
           </div>
 
-          <div className="flex items-center gap-1 rounded-full border border-slate-300/80 bg-white/70 p-0.5 shadow-sm backdrop-blur sm:gap-2 sm:p-1">
-            <Link
-              aria-label={`Open ${previousYear}`}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-900 sm:h-10 sm:w-10"
-              to={`/year/${previousYear}`}
-            >
-              <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5" />
-            </Link>
+          <div className="flex w-40 flex-col items-stretch gap-1.5 sm:w-44">
+            {status === 'authenticated' ? (
+              <button
+                className="inline-flex h-8 w-full items-center justify-between rounded-full border border-slate-300/80 bg-white/70 px-2.5 text-[11px] text-slate-700 shadow-sm backdrop-blur transition hover:bg-slate-100/80 hover:text-slate-900 sm:h-9 sm:px-3 sm:text-xs"
+                onClick={() => {
+                  void signOut()
+                }}
+                title={`Signed in as ${userLabel}. Click to sign out.`}
+                type="button"
+              >
+                <span className="inline-flex min-w-0 items-center gap-2">
+                  {profile?.picture ? (
+                    <img
+                      alt={userLabel}
+                      className="h-4 w-4 rounded-full object-cover sm:h-5 sm:w-5"
+                      src={profile.picture}
+                    />
+                  ) : (
+                    <CircleUserRound className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                  )}
+                  <span className="truncate">{userLabel}</span>
+                </span>
+                <LogOut className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
+              </button>
+            ) : (
+              <button
+                className="inline-flex h-8 w-full items-center justify-between rounded-full border border-slate-300/80 bg-white/70 px-2.5 text-[11px] text-slate-700 shadow-sm backdrop-blur transition hover:bg-slate-100/80 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60 sm:h-9 sm:px-3 sm:text-xs"
+                disabled={status === 'loading'}
+                onClick={() => {
+                  signIn(`${location.pathname}${location.search}`)
+                }}
+                type="button"
+              >
+                <span className="inline-flex min-w-0 items-center gap-2">
+                  <CircleUserRound className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                  <span className="truncate">{status === 'loading' ? 'Checking...' : 'Sign in'}</span>
+                </span>
+                <span aria-hidden className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
+              </button>
+            )}
 
-            <Link
-              className="font-display rounded-full bg-slate-900 px-3 py-1.5 text-xs text-slate-100 transition hover:bg-slate-700 sm:px-5 sm:py-2 sm:text-sm"
-              to={`/year/${currentYear}`}
-            >
-              {calendarYear === currentYear ? 'Current year' : 'Go to current'}
-            </Link>
+            <div className="flex h-8 w-full items-center rounded-full border border-slate-300/80 bg-white/70 p-0.5 shadow-sm backdrop-blur sm:h-9">
+              <Link
+                aria-label={`Open ${previousYear}`}
+                className="inline-flex h-full w-7 items-center justify-center rounded-full text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-900 sm:w-8"
+                to={`/year/${previousYear}`}
+              >
+                <ChevronLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              </Link>
 
-            <Link
-              aria-label={`Open ${nextYear}`}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-900 sm:h-10 sm:w-10"
-              to={`/year/${nextYear}`}
-            >
-              <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
-            </Link>
+              <Link
+                className="font-display inline-flex h-full flex-1 items-center justify-center rounded-full bg-slate-900 px-2 text-[11px] text-slate-100 transition hover:bg-slate-700 sm:px-3 sm:text-xs"
+                to={`/year/${currentYear}`}
+              >
+                {calendarYear === currentYear ? 'Current year' : 'Go to current'}
+              </Link>
+
+              <Link
+                aria-label={`Open ${nextYear}`}
+                className="inline-flex h-full w-7 items-center justify-center rounded-full text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-900 sm:w-8"
+                to={`/year/${nextYear}`}
+              >
+                <ChevronRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              </Link>
+            </div>
           </div>
         </header>
 
+        {authError ? (
+          <p className="mb-2 px-2 text-xs text-rose-700 sm:px-4 md:px-8">{authError}</p>
+        ) : null}
+        {status === 'unauthenticated' ? (
+          <p className="mb-2 px-2 text-xs text-slate-600 sm:px-4 md:px-8">
+            Sign in with Google to load your calendar events.
+          </p>
+        ) : null}
         {fetchError ? (
           <p className="mb-2 px-2 text-xs text-rose-700 sm:px-4 md:px-8">{fetchError}</p>
         ) : null}
