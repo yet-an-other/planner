@@ -85,6 +85,9 @@ components:
         location:
           type: string
           description: Location of the event
+        color:
+          type: string
+          description: Color code for the event
 
     ProblemDetails:
       type: object
