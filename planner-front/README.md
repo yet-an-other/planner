@@ -26,11 +26,22 @@ Install dependencies:
 pnpm install
 ```
 
+Create env file with Google credentials:
+
+```bash
+cp .env.example .env
+```
+
 Run development server:
 
 ```bash
 pnpm dev
 ```
+
+Required env vars:
+- `VITE_GOOGLE_CLIENT_ID`: OAuth client ID from Google Cloud.
+- `VITE_GOOGLE_OAUTH_REDIRECT_URI`: Redirect URI configured in the OAuth app (for local dev: `http://localhost:5173`).
+- `VITE_GOOGLE_CALENDAR_ID`: Calendar to read, default is `primary`.
 
 Build for production:
 

@@ -1,4 +1,4 @@
-import type { ApiEvent } from '../lib/plannerApiClient'
+import type { ApiEvent } from '../lib/eventsApi'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
