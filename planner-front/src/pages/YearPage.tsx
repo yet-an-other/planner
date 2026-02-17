@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { ChevronLeft, ChevronRight, CircleUserRound, LogOut } from 'lucide-react'
-import { Link, Navigate, useLocation, useParams } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useGoogleAuth } from '../lib/google/useGoogleAuth'
 import { useYearEvents } from './useYearEvents'
 import {
@@ -20,6 +20,7 @@ export function YearPage() {
   const todayKey = formatDateKey(now)
   const currentYear = now.getFullYear()
   const location = useLocation()
+  const navigate = useNavigate()
   const { year: yearParam } = useParams()
   const parsedYear = Number(yearParam)
   const hasValidYear = isValidYear(parsedYear)
@@ -49,17 +50,42 @@ export function YearPage() {
       <div className="pointer-events-none absolute right-0 top-1/2 h-72 w-72 rounded-full bg-emerald-100/80 blur-3xl" />
 
       <main className="flex h-[100dvh] w-full flex-col pt-4 sm:pt-6">
-        <header className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-3 px-2 sm:mb-4 sm:gap-4 sm:px-4 md:px-8">
-          <div>
+        <header className="mb-3 grid shrink-0 grid-cols-[1fr_auto_1fr] items-start gap-3 px-2 sm:mb-4 sm:gap-4 sm:px-4 md:px-8">
+          <div className="justify-self-start">
             <p className="font-display text-[10px] uppercase tracking-[0.18em] text-slate-500 sm:text-sm sm:tracking-[0.22em]">
               The Planner
             </p>
-            <h1 className="font-display text-3xl text-slate-900 sm:text-4xl md:text-5xl">
-              {calendarYear}
-            </h1>
           </div>
 
-          <div className="flex w-40 flex-col items-stretch gap-1.5 sm:w-44">
+          <div className="flex items-center gap-1 sm:gap-1.5">
+            <Link
+              aria-label={`Open ${previousYear}`}
+              className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300/80 bg-white/70 text-slate-600 shadow-sm backdrop-blur transition hover:bg-slate-200/70 hover:text-slate-900 sm:h-6 sm:w-6"
+              to={`/year/${previousYear}`}
+            >
+              <ChevronLeft className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+            </Link>
+
+            <h1
+              className="font-display cursor-pointer select-none text-3xl leading-none text-slate-900 sm:text-4xl md:text-5xl"
+              onDoubleClick={() => {
+                navigate(`/year/${currentYear}`)
+              }}
+              title="Double-click to jump to current year"
+            >
+              {calendarYear}
+            </h1>
+
+            <Link
+              aria-label={`Open ${nextYear}`}
+              className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300/80 bg-white/70 text-slate-600 shadow-sm backdrop-blur transition hover:bg-slate-200/70 hover:text-slate-900 sm:h-6 sm:w-6"
+              to={`/year/${nextYear}`}
+            >
+              <ChevronRight className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+            </Link>
+          </div>
+
+          <div className="flex w-40 flex-col items-stretch gap-1.5 justify-self-end sm:w-44">
             {status === 'authenticated' ? (
               <button
                 className="inline-flex h-8 w-full items-center justify-between rounded-full border border-slate-300/80 bg-white/70 px-2.5 text-[11px] text-slate-700 shadow-sm backdrop-blur transition hover:bg-slate-100/80 hover:text-slate-900 sm:h-9 sm:px-3 sm:text-xs"
@@ -100,47 +126,16 @@ export function YearPage() {
               </button>
             )}
 
-            <div className="flex h-8 w-full items-center rounded-full border border-slate-300/80 bg-white/70 p-0.5 shadow-sm backdrop-blur sm:h-9">
-              <Link
-                aria-label={`Open ${previousYear}`}
-                className="inline-flex h-full w-7 items-center justify-center rounded-full text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-900 sm:w-8"
-                to={`/year/${previousYear}`}
-              >
-                <ChevronLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              </Link>
-
-              <Link
-                className="font-display inline-flex h-full flex-1 items-center justify-center rounded-full bg-slate-900 px-2 text-[11px] text-slate-100 transition hover:bg-slate-700 sm:px-3 sm:text-xs"
-                to={`/year/${currentYear}`}
-              >
-                {calendarYear === currentYear ? 'Current year' : 'Go to current'}
-              </Link>
-
-              <Link
-                aria-label={`Open ${nextYear}`}
-                className="inline-flex h-full w-7 items-center justify-center rounded-full text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-900 sm:w-8"
-                to={`/year/${nextYear}`}
-              >
-                <ChevronRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              </Link>
-            </div>
+            {authError ? <p className="text-[10px] text-rose-700 sm:text-xs">{authError}</p> : null}
+            {status === 'unauthenticated' ? (
+              <p className="text-[10px] text-slate-600 sm:text-xs">
+                Sign in with Google to load your calendar events.
+              </p>
+            ) : null}
+            {fetchError ? <p className="text-[10px] text-rose-700 sm:text-xs">{fetchError}</p> : null}
+            {loading ? <p className="text-[10px] text-slate-600 sm:text-xs">Loading events...</p> : null}
           </div>
         </header>
-
-        {authError ? (
-          <p className="mb-2 px-2 text-xs text-rose-700 sm:px-4 md:px-8">{authError}</p>
-        ) : null}
-        {status === 'unauthenticated' ? (
-          <p className="mb-2 px-2 text-xs text-slate-600 sm:px-4 md:px-8">
-            Sign in with Google to load your calendar events.
-          </p>
-        ) : null}
-        {fetchError ? (
-          <p className="mb-2 px-2 text-xs text-rose-700 sm:px-4 md:px-8">{fetchError}</p>
-        ) : null}
-        {loading ? (
-          <p className="mb-2 px-2 text-xs text-slate-600 sm:px-4 md:px-8">Loading events...</p>
-        ) : null}
 
         <section className="flex min-h-0 w-full flex-1 flex-col overflow-hidden">
           <div className="min-h-0 overflow-y-auto">
