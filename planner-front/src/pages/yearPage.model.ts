@@ -19,6 +19,9 @@ export type CalendarEvent = {
   end: Date
   location: string
   color: string
+  status?: string
+  isAllDay?: boolean
+  calendarURL?: string
 }
 
 export type WeekBar = {

@@ -6,4 +6,7 @@ export type ApiEvent = {
   end: string
   location: string
   color: string
+  status?: string
+  isAllDay?: boolean
+  calendarURL?: string
 }
