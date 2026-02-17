@@ -17,6 +17,9 @@ const GOOGLE_EVENT_COLORS: Record<string, string> = {
   '11': '#d50000ff',
 }
 
+const AUTO_EVENT_HELPER_TEXT =
+  'To see detailed information for automatically created events like this one, use the official Google Calendar app.'
+
 type GoogleCalendarEnv = {
   VITE_GOOGLE_CALENDAR_ID?: string
 }
@@ -32,6 +35,24 @@ type GoogleCalendarEvent = {
   description?: string
   location?: string
   colorId?: string
+  status?: string
+  htmlLink?: string
+  source?: {
+    title?: string
+    url?: string
+  }
+  hangoutLink?: string
+  conferenceData?: {
+    entryPoints?: Array<{
+      uri?: string
+      label?: string
+      entryPointType?: string
+    }>
+  }
+  attachments?: Array<{
+    title?: string
+    fileUrl?: string
+  }>
   start?: {
     date?: string
     dateTime?: string
@@ -45,6 +66,51 @@ type GoogleCalendarEvent = {
 type GoogleCalendarEventsResponse = {
   items?: GoogleCalendarEvent[]
   nextPageToken?: string
+}
+
+function buildFallbackDescription(event: GoogleCalendarEvent): string {
+  const lines: string[] = []
+  const sourceTitle = event.source?.title?.trim()
+  const sourceURL = event.source?.url?.trim()
+
+  if (sourceTitle && sourceTitle !== AUTO_EVENT_HELPER_TEXT) {
+    lines.push(sourceTitle)
+  }
+  if (sourceURL && !sourceURL.includes('g.co/calendar')) {
+    lines.push(sourceURL)
+  }
+
+  if (event.hangoutLink?.trim()) {
+    lines.push(`Meeting link: ${event.hangoutLink.trim()}`)
+  }
+
+  for (const entryPoint of event.conferenceData?.entryPoints ?? []) {
+    const uri = entryPoint.uri?.trim()
+    const label = entryPoint.label?.trim()
+    if (!uri && !label) {
+      continue
+    }
+    if (label && uri) {
+      lines.push(`${label}: ${uri}`)
+      continue
+    }
+    lines.push(label ?? uri ?? '')
+  }
+
+  for (const attachment of event.attachments ?? []) {
+    const title = attachment.title?.trim()
+    const fileURL = attachment.fileUrl?.trim()
+    if (!title && !fileURL) {
+      continue
+    }
+    if (title && fileURL) {
+      lines.push(`Attachment: ${title} (${fileURL})`)
+      continue
+    }
+    lines.push(`Attachment: ${title ?? fileURL}`)
+  }
+
+  return lines.join('\n')
 }
 
 function resolveEventColor(rawColorID: string | undefined): string {
@@ -91,11 +157,14 @@ function mapGoogleEvent(event: GoogleCalendarEvent): ApiEvent | null {
   return {
     id: event.id,
     summary: event.summary?.trim() || 'Untitled event',
-    description: event.description ?? '',
+    description: event.description?.trim() || buildFallbackDescription(event),
     start: startDate.toISOString(),
     end: endDate.toISOString(),
     location: event.location ?? '',
     color: resolveEventColor(event.colorId),
+    status: event.status,
+    isAllDay: !hasDateTime,
+    calendarURL: event.htmlLink,
   }
 }
 
@@ -166,6 +235,40 @@ export class GoogleCalendarClient {
     } while (pageToken)
 
     return events
+  }
+
+  async getEventDetails(eventID: string, signal?: AbortSignal): Promise<ApiEvent | null> {
+    if (!eventID.trim()) {
+      return null
+    }
+
+    const url = new URL(
+      `${GOOGLE_CALENDAR_API_ROOT}/calendars/${encodeURIComponent(this.calendarID)}/events/${encodeURIComponent(eventID)}`,
+    )
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${this.accessToken}`,
+      },
+      signal,
+    })
+
+    if (response.status === 404) {
+      return null
+    }
+
+    if (response.status === 401) {
+      throw new Error('Google session expired. Please sign in again.')
+    }
+
+    if (!response.ok) {
+      throw new Error(`Google Calendar event request failed (${response.status})`)
+    }
+
+    const payload = (await response.json()) as GoogleCalendarEvent
+    return mapGoogleEvent(payload)
   }
 
   private buildEventsURL(year: number, pageToken: string | undefined): string {
