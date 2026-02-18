@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { GoogleCalendarClient } from '../lib/google/googleCalendarClient'
 import type { GoogleAuthSession } from '../lib/google/googleAuth.model'
+import { getGoogleCalendarEnv } from '../lib/runtimeEnv'
 import { parseApiEvent, sortEventsByTime } from './yearPage.model'
 import type { CalendarEvent } from './yearPage.model'
 
@@ -25,12 +26,7 @@ export function useYearEvents(year: number, session: GoogleAuthSession | null): 
 
     let calendarClient: GoogleCalendarClient
     try {
-      calendarClient = GoogleCalendarClient.fromEnv(
-        {
-          VITE_GOOGLE_CALENDAR_ID: import.meta.env.VITE_GOOGLE_CALENDAR_ID,
-        },
-        session.accessToken,
-      )
+      calendarClient = GoogleCalendarClient.fromEnv(getGoogleCalendarEnv(), session.accessToken)
     } catch (error) {
       setEvents([])
       setLoading(false)

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { getGoogleOAuthEnv } from '../runtimeEnv'
 import type { GoogleAuthSession, GoogleUserProfile } from './googleAuth.model'
 import { GoogleOAuthClient, consumeGoogleOAuthError } from './googleOAuth'
 
@@ -21,10 +22,7 @@ type OAuthSetup = {
 function buildOAuthSetup(): OAuthSetup {
   try {
     return {
-      client: GoogleOAuthClient.fromEnv({
-        VITE_GOOGLE_CLIENT_ID: import.meta.env.VITE_GOOGLE_CLIENT_ID,
-        VITE_GOOGLE_OAUTH_REDIRECT_URI: import.meta.env.VITE_GOOGLE_OAUTH_REDIRECT_URI,
-      }),
+      client: GoogleOAuthClient.fromEnv(getGoogleOAuthEnv()),
       error: null,
     }
   } catch (error) {
