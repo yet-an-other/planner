@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, CircleUserRound, LogOut } from 'lucide-react
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { GoogleCalendarClient } from '../lib/google/googleCalendarClient'
 import { useGoogleAuth } from '../lib/google/useGoogleAuth'
+import { getGoogleCalendarEnv } from '../lib/runtimeEnv'
 import { EventDetailsDialog } from './EventDetailsDialog'
 import { useYearEvents } from './useYearEvents'
 import {
@@ -39,12 +40,7 @@ export function YearPage() {
     }
 
     try {
-      return GoogleCalendarClient.fromEnv(
-        {
-          VITE_GOOGLE_CALENDAR_ID: import.meta.env.VITE_GOOGLE_CALENDAR_ID,
-        },
-        session.accessToken,
-      )
+      return GoogleCalendarClient.fromEnv(getGoogleCalendarEnv(), session.accessToken)
     } catch {
       return null
     }

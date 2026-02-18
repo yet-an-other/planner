@@ -55,6 +55,22 @@ Preview production build:
 pnpm preview
 ```
 
+## Docker
+
+Build and run in a multi-stage Alpine image behind Nginx:
+
+```bash
+docker build -t planner .
+docker run --rm -p 3000:3000 \
+  -e GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com \
+  -e GOOGLE_OAUTH_REDIRECT_URI=http://localhost:3000 \
+  -e GOOGLE_CALENDAR_ID=primary \
+  planner
+```
+
+The container listens on port `3000`.
+Runtime env is read from container variables (`GOOGLE_*` or `VITE_GOOGLE_*`) through `/env-config.js`.
+
 ## shadcn/ui
 
 Add components with:
