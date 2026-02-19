@@ -1,0 +1,21 @@
+{{- if .Values.ingressRoute.enabled }}
+{{- $domain := required "ingressRoute.domain must be set when ingressRoute.enabled=true" .Values.ingressRoute.domain }}
+apiVersion: {{ .Values.ingressRoute.apiVersion }}
+kind: IngressRoute
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    app.kubernetes.io/name: planner
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  entryPoints:
+    {{- toYaml .Values.ingressRoute.entryPoints | nindent 4 }}
+  routes:
+    - kind: Rule
+      match: Host(`{{ $domain }}`)
+      services:
+        - name: {{ .Release.Name }}
+          port: {{ .Values.service.port }}
+  tls:
+    secretName: {{ .Values.ingressRoute.tls.secretName }}
+{{- end }}

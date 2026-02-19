@@ -1,0 +1,13 @@
+{{- if .Values.secrets.enabled }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.secrets.namespace }}
+{{- end }}
+{{- if and .Values.argocd.app.destinationNamespace (or (not .Values.secrets.enabled) (ne .Values.argocd.app.destinationNamespace .Values.secrets.namespace)) }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.argocd.app.destinationNamespace }}
+{{- end }}

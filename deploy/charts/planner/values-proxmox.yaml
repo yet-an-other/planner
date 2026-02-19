@@ -1,0 +1,11 @@
+replicaCount: 1
+
+certificate:
+  enabled: true
+  commonName: planner.bdgn.me
+  dnsNames:
+    - planner.bdgn.me
+
+ingressRoute:
+  enabled: true
+  domain: planner.bdgn.me

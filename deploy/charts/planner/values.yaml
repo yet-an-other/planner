@@ -1,0 +1,37 @@
+replicaCount: 1
+
+image:
+  repository: yet-an-other/planner
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 3000
+
+containerPort: 3000
+
+env:
+  existingSecret: planner-runtime-env
+
+resources: {}
+
+certificate:
+  enabled: false
+  name: planner-tls
+  secretName: planner-tls
+  commonName: ""
+  dnsNames: []
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+    group: cert-manager.io
+
+ingressRoute:
+  enabled: false
+  apiVersion: traefik.io/v1alpha1
+  entryPoints:
+    - websecure
+  domain: ""
+  tls:
+    secretName: planner-tls

@@ -1,0 +1,51 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ .Values.argocd.app.name }}
+  namespace: {{ .Values.argocd.app.namespace }}
+  labels:
+    app.kubernetes.io/name: planner-bootstrap
+    app.kubernetes.io/component: argocd-application
+  {{- if .Values.imageUpdater.enabled }}
+  annotations:
+    argocd-image-updater.argoproj.io/image-list: {{ printf "%s=%s" .Values.imageUpdater.alias .Values.image.repository | quote }}
+    {{ printf "argocd-image-updater.argoproj.io/%s.update-strategy" .Values.imageUpdater.alias }}: {{ .Values.imageUpdater.updateStrategy | quote }}
+    {{ printf "argocd-image-updater.argoproj.io/%s.allow-tags" .Values.imageUpdater.alias }}: {{ .Values.imageUpdater.allowTags | quote }}
+    {{ printf "argocd-image-updater.argoproj.io/%s.helm.image-name" .Values.imageUpdater.alias }}: {{ .Values.argocd.app.helm.imageRepositoryParam | quote }}
+    {{ printf "argocd-image-updater.argoproj.io/%s.helm.image-tag" .Values.imageUpdater.alias }}: {{ .Values.argocd.app.helm.imageTagParam | quote }}
+    argocd-image-updater.argoproj.io/write-back-method: {{ .Values.imageUpdater.writeBackMethod | quote }}
+    {{- if .Values.imageUpdater.pullSecret }}
+    {{ printf "argocd-image-updater.argoproj.io/%s.pull-secret" .Values.imageUpdater.alias }}: {{ .Values.imageUpdater.pullSecret | quote }}
+    {{- end }}
+  {{- end }}
+spec:
+  project: {{ .Values.argocd.app.project }}
+  destination:
+    server: {{ .Values.argocd.app.destinationServer }}
+    namespace: {{ .Values.argocd.app.destinationNamespace }}
+  source:
+    repoURL: {{ .Values.argocd.app.repoURL }}
+    targetRevision: {{ .Values.argocd.app.targetRevision }}
+    path: {{ .Values.argocd.app.path }}
+    helm:
+      {{- if .Values.argocd.app.helm.valueFiles }}
+      valueFiles:
+        {{- toYaml .Values.argocd.app.helm.valueFiles | nindent 8 }}
+      {{- end }}
+      parameters:
+        - name: {{ .Values.argocd.app.helm.imageRepositoryParam }}
+          value: {{ .Values.image.repository }}
+        - name: {{ .Values.argocd.app.helm.imageTagParam }}
+          value: {{ .Values.image.tag }}
+        {{- if and .Values.secrets.enabled .Values.argocd.app.helm.envSecretParam }}
+        - name: {{ .Values.argocd.app.helm.envSecretParam }}
+          value: {{ .Values.secrets.name }}
+        {{- end }}
+  syncPolicy:
+    automated:
+      prune: {{ .Values.syncPolicy.automated.prune }}
+      selfHeal: {{ .Values.syncPolicy.automated.selfHeal }}
+    {{- if .Values.syncPolicy.syncOptions }}
+    syncOptions:
+      {{- toYaml .Values.syncPolicy.syncOptions | nindent 6 }}
+    {{- end }}
