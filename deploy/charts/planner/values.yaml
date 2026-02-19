@@ -23,7 +23,7 @@ certificate:
   commonName: ""
   dnsNames: []
   issuerRef:
-    name: letsencrypt-prod
+    name: letsencrypt-dns
     kind: ClusterIssuer
     group: cert-manager.io
 
