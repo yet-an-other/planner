@@ -3,6 +3,8 @@ import { getGoogleOAuthEnv } from '../runtimeEnv'
 import type { GoogleAuthSession, GoogleUserProfile } from './googleAuth.model'
 import { GoogleOAuthClient, consumeGoogleOAuthError } from './googleOAuth'
 
+const SESSION_RENEWAL_SKEW_MS = 60 * 1000
+
 type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated'
 
 type UseGoogleAuthResult = {
@@ -60,6 +62,11 @@ export function useGoogleAuth(): UseGoogleAuthResult {
 
       const activeSession = client.getSession()
       if (!activeSession) {
+        if (client.canAttemptSilentSignIn()) {
+          client.startSilentSignIn(`${window.location.pathname}${window.location.search}`)
+          return
+        }
+
         setStatus('unauthenticated')
         setSession(null)
         setProfile(null)
@@ -95,6 +102,31 @@ export function useGoogleAuth(): UseGoogleAuthResult {
     }
   }, [oauthSetup])
 
+  useEffect(() => {
+    const client = oauthSetup.client
+    if (!client || !session) {
+      return
+    }
+
+    const renewInMs = session.expiresAt - Date.now() - SESSION_RENEWAL_SKEW_MS
+    if (renewInMs <= 0) {
+      if (client.canAttemptSilentSignIn()) {
+        client.startSilentSignIn(`${window.location.pathname}${window.location.search}`)
+      }
+      return
+    }
+
+    const timeoutID = window.setTimeout(() => {
+      if (client.canAttemptSilentSignIn()) {
+        client.startSilentSignIn(`${window.location.pathname}${window.location.search}`)
+      }
+    }, renewInMs)
+
+    return () => {
+      window.clearTimeout(timeoutID)
+    }
+  }, [oauthSetup.client, session])
+
   const signIn = useCallback(
     (returnToPath: string) => {
       if (!oauthSetup.client) {
@@ -102,6 +134,7 @@ export function useGoogleAuth(): UseGoogleAuthResult {
         return
       }
 
+      setAuthError(null)
       oauthSetup.client.startSignIn(returnToPath)
     },
     [oauthSetup],
@@ -115,6 +148,7 @@ export function useGoogleAuth(): UseGoogleAuthResult {
     setSession(null)
     setProfile(null)
     setStatus('unauthenticated')
+    setAuthError(null)
   }, [oauthSetup.client, session])
 
   return {
