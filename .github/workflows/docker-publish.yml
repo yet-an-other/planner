@@ -8,9 +8,19 @@ on:
       - main
 
 jobs:
-  docker:
+  build-arch:
     if: github.event.pull_request.merged == true
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
 
@@ -31,6 +41,13 @@ jobs:
           IMAGE_NAME="${DOCKERHUB_USERNAME}/$(echo "$REPO_NAME" | tr '[:upper:]' '[:lower:]')"
           echo "name=$IMAGE_NAME" >> "$GITHUB_OUTPUT"
 
+      - name: Compute image tags
+        id: vars
+        env:
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        run: |
+          SHORT_SHA="$(printf '%s' "$MERGE_SHA" | cut -c1-7)"
+          echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -40,23 +57,71 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Extract image metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ steps.image.outputs.name }}
-          tags: |
-            type=raw,value=latest
-            type=sha,format=short
-
-      - name: Build and push Docker image
+      - name: Build and push single-arch image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/amd64
+          platforms: ${{ matrix.platform }}
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: |
+            ${{ steps.image.outputs.name }}:latest-${{ matrix.arch }}
+            ${{ steps.image.outputs.name }}:sha-${{ steps.vars.outputs.short_sha }}-${{ matrix.arch }}
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
+
+  publish-manifest:
+    if: github.event.pull_request.merged == true
+    needs:
+      - build-arch
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Compute Docker image name
+        id: image
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_REPOSITORY: ${{ vars.DOCKERHUB_REPOSITORY }}
+          REPOSITORY_NAME: ${{ github.event.repository.name }}
+        run: |
+          REPO_NAME="${DOCKERHUB_REPOSITORY:-$REPOSITORY_NAME}"
+          IMAGE_NAME="${DOCKERHUB_USERNAME}/$(echo "$REPO_NAME" | tr '[:upper:]' '[:lower:]')"
+          echo "name=$IMAGE_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Compute image tags
+        id: vars
+        env:
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        run: |
+          SHORT_SHA="$(printf '%s' "$MERGE_SHA" | cut -c1-7)"
+          echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Create and push latest multi-arch manifest
+        run: |
+          docker buildx imagetools create \
+            --tag "${{ steps.image.outputs.name }}:latest" \
+            "${{ steps.image.outputs.name }}:latest-amd64" \
+            "${{ steps.image.outputs.name }}:latest-arm64"
+
+      - name: Create and push sha multi-arch manifest
+        run: |
+          docker buildx imagetools create \
+            --tag "${{ steps.image.outputs.name }}:sha-${{ steps.vars.outputs.short_sha }}" \
+            "${{ steps.image.outputs.name }}:sha-${{ steps.vars.outputs.short_sha }}-amd64" \
+            "${{ steps.image.outputs.name }}:sha-${{ steps.vars.outputs.short_sha }}-arm64"
+
+      - name: Verify manifest tags
+        run: |
+          docker buildx imagetools inspect "${{ steps.image.outputs.name }}:latest"
+          docker buildx imagetools inspect "${{ steps.image.outputs.name }}:sha-${{ steps.vars.outputs.short_sha }}"
