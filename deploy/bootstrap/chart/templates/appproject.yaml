@@ -1,0 +1,20 @@
+{{- if .Values.argocd.project.create }}
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: {{ .Values.argocd.project.name }}
+  namespace: {{ .Values.argocd.namespace }}
+  labels:
+    app.kubernetes.io/name: planner-bootstrap
+    app.kubernetes.io/component: argocd-project
+spec:
+  description: {{ .Values.argocd.project.description | quote }}
+  sourceRepos:
+    {{- toYaml .Values.argocd.project.sourceRepos | nindent 4 }}
+  destinations:
+    {{- toYaml .Values.argocd.project.destinations | nindent 4 }}
+  clusterResourceWhitelist:
+    {{- toYaml .Values.argocd.project.clusterResourceWhitelist | nindent 4 }}
+  namespaceResourceWhitelist:
+    {{- toYaml .Values.argocd.project.namespaceResourceWhitelist | nindent 4 }}
+{{- end }}

@@ -1,0 +1,26 @@
+cluster:
+  name: proxmox
+
+secrets:
+  namespace: planner
+  name: planner-runtime-env
+
+argocd:
+  project:
+    name: planner
+    destinations:
+      - namespace: planner
+        server: https://kubernetes.default.svc
+  app:
+    name: planner
+    project: planner
+    destinationServer: https://kubernetes.default.svc
+    destinationNamespace: planner
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-proxmox.yaml
+
+image:
+  repository: yet-an-other/planner
+  tag: sha-0000000

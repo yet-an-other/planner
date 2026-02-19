@@ -1,0 +1,23 @@
+{{- if .Values.certificate.enabled }}
+{{- $domain := required "certificate.commonName must be set when certificate.enabled=true" .Values.certificate.commonName }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ .Values.certificate.name }}
+  labels:
+    app.kubernetes.io/name: planner
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  secretName: {{ .Values.certificate.secretName }}
+  commonName: {{ $domain }}
+  dnsNames:
+    {{- if .Values.certificate.dnsNames }}
+    {{- toYaml .Values.certificate.dnsNames | nindent 4 }}
+    {{- else }}
+    - {{ $domain }}
+    {{- end }}
+  issuerRef:
+    name: {{ .Values.certificate.issuerRef.name }}
+    kind: {{ .Values.certificate.issuerRef.kind }}
+    group: {{ .Values.certificate.issuerRef.group }}
+{{- end }}

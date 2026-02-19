@@ -1,0 +1,11 @@
+replicaCount: 1
+
+certificate:
+  enabled: true
+  commonName: planner.ivan-b.com
+  dnsNames:
+    - planner.ivan-b.com
+
+ingressRoute:
+  enabled: true
+  domain: planner.ivan-b.com

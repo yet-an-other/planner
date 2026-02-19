@@ -1,0 +1,60 @@
+cluster:
+  name: ""
+
+secrets:
+  enabled: true
+  namespace: planner
+  name: planner-runtime-env
+  env: {}
+
+argocd:
+  namespace: argocd
+  project:
+    create: true
+    name: planner
+    description: Planner application project
+    sourceRepos:
+      - https://github.com/yet-an-other/planner.git
+    destinations:
+      - namespace: planner
+        server: https://kubernetes.default.svc
+    clusterResourceWhitelist:
+      - group: "*"
+        kind: "*"
+    namespaceResourceWhitelist:
+      - group: "*"
+        kind: "*"
+  app:
+    name: planner
+    namespace: argocd
+    project: planner
+    repoURL: https://github.com/yet-an-other/planner.git
+    targetRevision: main
+    path: deploy/charts/planner
+    destinationServer: https://kubernetes.default.svc
+    destinationNamespace: planner
+    helm:
+      valueFiles:
+        - values.yaml
+      imageRepositoryParam: image.repository
+      imageTagParam: image.tag
+      envSecretParam: env.existingSecret
+
+syncPolicy:
+  automated:
+    prune: true
+    selfHeal: true
+  syncOptions:
+    - CreateNamespace=true
+
+image:
+  repository: yet-an-other/planner
+  tag: sha-0000000
+
+imageUpdater:
+  enabled: true
+  alias: planner
+  updateStrategy: newest-build
+  allowTags: regexp:^sha-[a-f0-9]{7}$
+  writeBackMethod: argocd
+  pullSecret: ""
