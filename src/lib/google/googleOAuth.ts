@@ -8,6 +8,9 @@ const SESSION_STORAGE_KEY = 'planner.google.oauth.session'
 const OAUTH_STATE_KEY = 'planner.google.oauth.state'
 const OAUTH_RETURN_TO_KEY = 'planner.google.oauth.return-to'
 const OAUTH_ERROR_KEY = 'planner.google.oauth.error'
+const OAUTH_PROMPT_MODE_KEY = 'planner.google.oauth.prompt-mode'
+const OAUTH_HAS_SIGNED_IN_KEY = 'planner.google.oauth.has-signed-in'
+const OAUTH_SILENT_ATTEMPTED_KEY = 'planner.google.oauth.silent-attempted'
 
 const OAUTH_SCOPES = [
   'openid',
@@ -15,6 +18,15 @@ const OAUTH_SCOPES = [
   'email',
   'https://www.googleapis.com/auth/calendar.readonly',
 ].join(' ')
+
+const SILENT_PROMPT_ERROR_CODES = new Set([
+  'interaction_required',
+  'login_required',
+  'account_selection_required',
+  'consent_required',
+])
+
+type OAuthPromptMode = 'none' | 'select_account'
 
 type GoogleUserInfoResponse = {
   sub?: string
@@ -51,8 +63,33 @@ function persistAuthError(message: string): void {
   window.sessionStorage.setItem(OAUTH_ERROR_KEY, message)
 }
 
+function persistSignedInHint(): void {
+  window.localStorage.setItem(OAUTH_HAS_SIGNED_IN_KEY, '1')
+}
+
+function clearSignedInHint(): void {
+  window.localStorage.removeItem(OAUTH_HAS_SIGNED_IN_KEY)
+}
+
+function hasSignedInHint(): boolean {
+  return window.localStorage.getItem(OAUTH_HAS_SIGNED_IN_KEY) === '1'
+}
+
+function markSilentAttempted(): void {
+  window.sessionStorage.setItem(OAUTH_SILENT_ATTEMPTED_KEY, '1')
+}
+
+function clearSilentAttempted(): void {
+  window.sessionStorage.removeItem(OAUTH_SILENT_ATTEMPTED_KEY)
+}
+
+function hasSilentAttemptBeenMade(): boolean {
+  return window.sessionStorage.getItem(OAUTH_SILENT_ATTEMPTED_KEY) === '1'
+}
+
 function clearOAuthState(): void {
   window.sessionStorage.removeItem(OAUTH_STATE_KEY)
+  window.sessionStorage.removeItem(OAUTH_PROMPT_MODE_KEY)
 }
 
 function clearPendingReturnTo(): string {
@@ -91,11 +128,29 @@ function parseStoredSession(raw: string): GoogleAuthSession | null {
   }
 }
 
+function readStoredSessionRaw(): string | null {
+  const raw = window.sessionStorage.getItem(SESSION_STORAGE_KEY)
+  if (raw) {
+    return raw
+  }
+
+  const legacyRaw = window.localStorage.getItem(SESSION_STORAGE_KEY)
+  if (!legacyRaw) {
+    return null
+  }
+
+  window.sessionStorage.setItem(SESSION_STORAGE_KEY, legacyRaw)
+  window.localStorage.removeItem(SESSION_STORAGE_KEY)
+  return legacyRaw
+}
+
 function storeSession(session: GoogleAuthSession): void {
-  window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session))
+  window.sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session))
+  persistSignedInHint()
 }
 
 function clearSession(): void {
+  window.sessionStorage.removeItem(SESSION_STORAGE_KEY)
   window.localStorage.removeItem(SESSION_STORAGE_KEY)
 }
 
@@ -115,13 +170,18 @@ export function consumeGoogleOAuthRedirectIfPresent(): void {
 
   const expectedState = window.sessionStorage.getItem(OAUTH_STATE_KEY)
   const returnedState = params.get('state')
+  const promptMode = window.sessionStorage.getItem(OAUTH_PROMPT_MODE_KEY) as OAuthPromptMode | null
   const returnToPath = clearPendingReturnTo()
   clearOAuthState()
 
   const responseError = params.get('error')
   if (responseError) {
     clearSession()
-    persistAuthError(`Google sign-in failed: ${responseError.replaceAll('_', ' ')}`)
+    const isSilentPromptError =
+      promptMode === 'none' && SILENT_PROMPT_ERROR_CODES.has(responseError)
+    if (!isSilentPromptError) {
+      persistAuthError(`Google sign-in failed: ${responseError.replaceAll('_', ' ')}`)
+    }
     window.history.replaceState(window.history.state, '', returnToPath)
     return
   }
@@ -151,6 +211,7 @@ export function consumeGoogleOAuthRedirectIfPresent(): void {
 
   storeSession(session)
   window.sessionStorage.removeItem(OAUTH_ERROR_KEY)
+  clearSilentAttempted()
   window.history.replaceState(window.history.state, '', returnToPath)
 }
 
@@ -183,8 +244,27 @@ export class GoogleOAuthClient {
     return new GoogleOAuthClient(clientID, redirectURI)
   }
 
+  private startAuthorizationFlow(returnToPath: string, promptMode: OAuthPromptMode): void {
+    const state = generateStateToken()
+    window.sessionStorage.setItem(OAUTH_STATE_KEY, state)
+    window.sessionStorage.setItem(OAUTH_RETURN_TO_KEY, normalizeReturnPath(returnToPath))
+    window.sessionStorage.setItem(OAUTH_PROMPT_MODE_KEY, promptMode)
+
+    const params = new URLSearchParams({
+      client_id: this.clientID,
+      redirect_uri: this.redirectURI,
+      response_type: 'token',
+      scope: OAUTH_SCOPES,
+      include_granted_scopes: 'true',
+      state,
+      prompt: promptMode,
+    })
+
+    window.location.assign(`${OAUTH_ENDPOINT}?${params.toString()}`)
+  }
+
   getSession(): GoogleAuthSession | null {
-    const raw = window.localStorage.getItem(SESSION_STORAGE_KEY)
+    const raw = readStoredSessionRaw()
     if (!raw) {
       return null
     }
@@ -200,25 +280,26 @@ export class GoogleOAuthClient {
       return null
     }
 
+    persistSignedInHint()
     return session
   }
 
+  canAttemptSilentSignIn(): boolean {
+    return hasSignedInHint() && !hasSilentAttemptBeenMade()
+  }
+
   startSignIn(returnToPath: string): void {
-    const state = generateStateToken()
-    window.sessionStorage.setItem(OAUTH_STATE_KEY, state)
-    window.sessionStorage.setItem(OAUTH_RETURN_TO_KEY, normalizeReturnPath(returnToPath))
+    clearSilentAttempted()
+    this.startAuthorizationFlow(returnToPath, 'select_account')
+  }
 
-    const params = new URLSearchParams({
-      client_id: this.clientID,
-      redirect_uri: this.redirectURI,
-      response_type: 'token',
-      scope: OAUTH_SCOPES,
-      include_granted_scopes: 'true',
-      state,
-      prompt: 'consent',
-    })
+  startSilentSignIn(returnToPath: string): void {
+    if (!this.canAttemptSilentSignIn()) {
+      return
+    }
 
-    window.location.assign(`${OAUTH_ENDPOINT}?${params.toString()}`)
+    markSilentAttempted()
+    this.startAuthorizationFlow(returnToPath, 'none')
   }
 
   async getUserProfile(session: GoogleAuthSession, signal?: AbortSignal): Promise<GoogleUserProfile> {
@@ -264,7 +345,10 @@ export class GoogleOAuthClient {
     }
 
     clearSession()
+    clearSignedInHint()
+    clearSilentAttempted()
     clearOAuthState()
     window.sessionStorage.removeItem(OAUTH_RETURN_TO_KEY)
+    window.sessionStorage.removeItem(OAUTH_ERROR_KEY)
   }
 }
