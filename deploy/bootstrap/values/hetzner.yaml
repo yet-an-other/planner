@@ -23,4 +23,4 @@ argocd:
 
 image:
   repository: yet-an-other/planner
-  tag: sha-0000000
+  tag: latest
