@@ -25,6 +25,7 @@ Optional flags:
 
 - `--env-file <path>`: defaults to `$HOME/remote-kube/<cluster-name>/planner.env`
 - `--release <name>`: defaults to `planner-bootstrap`
+- `--argocd-namespace <name>`: defaults to `argocd`
 - `--dry-run`: renders and validates without applying
 
 ## Inputs
@@ -34,6 +35,12 @@ Optional flags:
 - Runtime env vars file:
   `KEY=VALUE` lines loaded into the Kubernetes Secret
 - Existing Argo CD installation in the target cluster (default namespace: `argocd`)
+
+## Automatic Argo CD Drift Exclusion
+
+After bootstrap apply, the script patches `argocd-cm` to exclude `cilium.io/CiliumIdentity`
+from Argo CD diff/prune tracking. This prevents permanent `OutOfSync` on Cilium-managed
+identities that are not part of this app's Git source.
 
 ## Security Notes
 

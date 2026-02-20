@@ -7,7 +7,7 @@ CHART_DIR="${SCRIPT_DIR}/chart"
 usage() {
   cat <<'USAGE'
 Usage:
-  deploy/bootstrap/bootstrap.sh <cluster-name> [--env-file <path>] [--release <name>] [--dry-run]
+  deploy/bootstrap/bootstrap.sh <cluster-name> [--env-file <path>] [--release <name>] [--argocd-namespace <name>] [--dry-run]
 
 Description:
   Bootstraps planner deployment objects into a target cluster using Helm,
@@ -38,9 +38,61 @@ yaml_escape() {
   printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
 }
 
+ensure_argocd_resource_exclusion() {
+  local kubeconfig_path="$1"
+  local argocd_namespace="$2"
+  local exclusion_block
+  local existing_exclusions
+  local merged_exclusions
+  local patch_file
+
+  exclusion_block='- apiGroups:
+  - cilium.io
+  kinds:
+  - CiliumIdentity
+  clusters:
+  - "*"'
+
+  existing_exclusions="$(
+    kubectl --kubeconfig "${kubeconfig_path}" -n "${argocd_namespace}" get configmap argocd-cm \
+      -o jsonpath='{.data.resource\.exclusions}' 2>/dev/null || true
+  )"
+
+  if [[ -n "${existing_exclusions}" ]] && printf '%s\n' "${existing_exclusions}" | grep -q 'CiliumIdentity'; then
+    echo "Argo CD ConfigMap already excludes CiliumIdentity from diff."
+    return 0
+  fi
+
+  if [[ -n "${existing_exclusions}" ]]; then
+    merged_exclusions="${existing_exclusions}"$'\n'"${exclusion_block}"
+  else
+    merged_exclusions="${exclusion_block}"
+  fi
+
+  patch_file="$(mktemp)"
+  {
+    echo "data:"
+    echo "  resource.exclusions: |"
+    printf '%s\n' "${merged_exclusions}" | sed 's/^/    /'
+  } > "${patch_file}"
+
+  kubectl --kubeconfig "${kubeconfig_path}" -n "${argocd_namespace}" patch configmap argocd-cm \
+    --type merge --patch-file "${patch_file}"
+  rm -f "${patch_file}"
+
+  if kubectl --kubeconfig "${kubeconfig_path}" -n "${argocd_namespace}" get deploy argocd-application-controller >/dev/null 2>&1; then
+    kubectl --kubeconfig "${kubeconfig_path}" -n "${argocd_namespace}" rollout restart deploy/argocd-application-controller
+  elif kubectl --kubeconfig "${kubeconfig_path}" -n "${argocd_namespace}" get statefulset argocd-application-controller >/dev/null 2>&1; then
+    kubectl --kubeconfig "${kubeconfig_path}" -n "${argocd_namespace}" rollout restart statefulset/argocd-application-controller
+  else
+    echo "Warning: argocd-application-controller workload was not found in namespace ${argocd_namespace}."
+  fi
+}
+
 cluster_name=""
 env_file=""
 release_name="planner-bootstrap"
+argocd_namespace="argocd"
 dry_run="false"
 
 while (($# > 0)); do
@@ -63,6 +115,15 @@ while (($# > 0)); do
       release_name="${1:-}"
       if [[ -z "${release_name}" ]]; then
         echo "--release requires a value." >&2
+        usage
+        exit 1
+      fi
+      ;;
+    --argocd-namespace)
+      shift
+      argocd_namespace="${1:-}"
+      if [[ -z "${argocd_namespace}" ]]; then
+        echo "--argocd-namespace requires a value." >&2
         usage
         exit 1
       fi
@@ -94,6 +155,7 @@ if [[ -z "${cluster_name}" ]]; then
 fi
 
 require_cmd helm
+require_cmd kubectl
 
 kubeconfig_path="${HOME}/remote-kube/${cluster_name}/config"
 cluster_values_file="${SCRIPT_DIR}/values/${cluster_name}.yaml"
@@ -156,7 +218,7 @@ fi
 
 helm_args=(
   upgrade --install "${release_name}" "${CHART_DIR}"
-  --namespace argocd
+  --namespace "${argocd_namespace}"
   --kubeconfig "${kubeconfig_path}"
   -f "${cluster_values_file}"
   -f "${secret_values_file}"
@@ -171,7 +233,16 @@ echo "Bootstrapping planner deployment on cluster '${cluster_name}'"
 echo "Using kubeconfig: ${kubeconfig_path}"
 echo "Using values file: ${cluster_values_file}"
 echo "Using env file: ${env_file}"
+echo "Using Argo CD namespace: ${argocd_namespace}"
 
 helm "${helm_args[@]}"
+
+if [[ "${dry_run}" == "true" ]]; then
+  echo "Dry-run mode: skipping Argo CD ConfigMap patch."
+  echo "Bootstrap completed successfully."
+  exit 0
+fi
+
+ensure_argocd_resource_exclusion "${kubeconfig_path}" "${argocd_namespace}"
 
 echo "Bootstrap completed successfully."
