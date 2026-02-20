@@ -1,7 +1,7 @@
 replicaCount: 1
 
 image:
-  repository: yet-an-other/planner
+  repository: ilaverlin/planner
   tag: latest
   pullPolicy: IfNotPresent
 

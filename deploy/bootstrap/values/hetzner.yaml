@@ -22,5 +22,5 @@ argocd:
         - values-hetzner.yaml
 
 image:
-  repository: yet-an-other/planner
+  repository: ilaverlin/planner
   tag: latest

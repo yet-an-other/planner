@@ -48,7 +48,7 @@ syncPolicy:
     - CreateNamespace=true
 
 image:
-  repository: yet-an-other/planner
+  repository: ilaverlin/planner
   tag: latest
 
 imageUpdater:
