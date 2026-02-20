@@ -37,6 +37,7 @@ export type WeekRenderData = {
   weekBars: WeekBar[]
   shortEventsByDateKey: Record<string, CalendarEvent[]>
   overflowBarsByDateKey: Record<string, number>
+  activeBarsByDateKey: Record<string, number>
 }
 
 type Placement = {
@@ -90,17 +91,29 @@ export function formatDateKey(date: Date): string {
 }
 
 export function formatEventTime(date: Date): string {
-  return new Intl.DateTimeFormat(undefined, {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(date)
+  return TIME_FORMATTER.format(date)
 }
 
+const TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+})
+
+const RGBA_CACHE = new Map<string, string>()
+
 export function toRgba(color: string, alpha: number): string {
+  const cacheKey = `${color}|${alpha}`
+  const cached = RGBA_CACHE.get(cacheKey)
+  if (cached) {
+    return cached
+  }
+
   const normalized = color.replace('#', '').trim()
   if (!/^[0-9a-fA-F]{3}$|^[0-9a-fA-F]{4}$|^[0-9a-fA-F]{6}$|^[0-9a-fA-F]{8}$/.test(normalized)) {
-    return `rgba(123, 150, 83, ${alpha})`
+    const fallback = `rgba(123, 150, 83, ${alpha})`
+    RGBA_CACHE.set(cacheKey, fallback)
+    return fallback
   }
 
   let full = normalized
@@ -119,7 +132,9 @@ export function toRgba(color: string, alpha: number): string {
   const blue = Number.parseInt(full.slice(4, 6), 16)
   const embeddedAlpha = Number.parseInt(full.slice(6, 8), 16) / 255
   const effectiveAlpha = Math.max(0, Math.min(1, alpha * embeddedAlpha))
-  return `rgba(${red}, ${green}, ${blue}, ${effectiveAlpha})`
+  const rgba = `rgba(${red}, ${green}, ${blue}, ${effectiveAlpha})`
+  RGBA_CACHE.set(cacheKey, rgba)
+  return rgba
 }
 
 export function parseApiEvent(raw: ApiEvent): CalendarEvent | null {
@@ -271,10 +286,14 @@ export function buildWeekRenderData(week: Date[], events: CalendarEvent[]): Week
   const overflowBarsByDateKey: Record<string, number> = Object.fromEntries(
     weekKeys.map((key) => [key, 0]),
   )
+  const activeBarsByDateKey: Record<string, number> = Object.fromEntries(
+    weekKeys.map((key) => [key, 0]),
+  )
 
   for (let dayIdx = 0; dayIdx < weekKeys.length; dayIdx += 1) {
     const key = weekKeys[dayIdx]
     const activeBars = allWeekBars.filter((bar) => bar.startIdx <= dayIdx && bar.endIdx >= dayIdx)
+    activeBarsByDateKey[key] = activeBars.length
     overflowBarsByDateKey[key] = Math.max(0, activeBars.length - MAX_VISIBLE_BARS)
 
     shortEventsByDateKey[key].sort((a, b) => a.start.getTime() - b.start.getTime())
@@ -293,5 +312,6 @@ export function buildWeekRenderData(week: Date[], events: CalendarEvent[]): Week
     weekBars,
     shortEventsByDateKey,
     overflowBarsByDateKey,
+    activeBarsByDateKey,
   }
 }
