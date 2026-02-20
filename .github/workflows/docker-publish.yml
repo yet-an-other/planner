@@ -64,6 +64,8 @@ jobs:
           file: ./Dockerfile
           platforms: ${{ matrix.platform }}
           push: true
+          build-args: |
+            VITE_APP_VERSION=sha-${{ steps.vars.outputs.short_sha }}
           tags: |
             ${{ steps.image.outputs.name }}:latest-${{ matrix.arch }}
             ${{ steps.image.outputs.name }}:sha-${{ steps.vars.outputs.short_sha }}-${{ matrix.arch }}
@@ -76,9 +78,15 @@ jobs:
       - build-arch
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
 
     steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
       - name: Compute Docker image name
         id: image
         env:
@@ -125,3 +133,27 @@ jobs:
         run: |
           docker buildx imagetools inspect "${{ steps.image.outputs.name }}:latest"
           docker buildx imagetools inspect "${{ steps.image.outputs.name }}:sha-${{ steps.vars.outputs.short_sha }}"
+
+      - name: Update planner chart image reference
+        env:
+          IMAGE_NAME: ${{ steps.image.outputs.name }}
+          SHORT_SHA: ${{ steps.vars.outputs.short_sha }}
+        run: |
+          sed -i -E "s|^  repository:.*$|  repository: ${IMAGE_NAME}|" deploy/charts/planner/values.yaml
+          sed -i -E "s|^  tag:.*$|  tag: sha-${SHORT_SHA}|" deploy/charts/planner/values.yaml
+
+      - name: Commit planner chart image update
+        env:
+          SHORT_SHA: ${{ steps.vars.outputs.short_sha }}
+        run: |
+          if git diff --quiet -- deploy/charts/planner/values.yaml; then
+            echo "Chart already points to sha-${SHORT_SHA}; nothing to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add deploy/charts/planner/values.yaml
+          git commit -m "chore(deploy): bump planner image to sha-${SHORT_SHA}"
+          git pull --rebase origin main
+          git push origin HEAD:main

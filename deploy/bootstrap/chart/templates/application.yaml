@@ -32,15 +32,21 @@ spec:
       valueFiles:
         {{- toYaml .Values.argocd.app.helm.valueFiles | nindent 8 }}
       {{- end }}
+      {{- $setImageParameters := .Values.argocd.app.helm.setImageParameters }}
+      {{- $setEnvSecretParameter := and .Values.secrets.enabled .Values.argocd.app.helm.envSecretParam }}
+      {{- if or $setImageParameters $setEnvSecretParameter }}
       parameters:
+        {{- if $setImageParameters }}
         - name: {{ .Values.argocd.app.helm.imageRepositoryParam }}
           value: {{ .Values.image.repository }}
         - name: {{ .Values.argocd.app.helm.imageTagParam }}
           value: {{ .Values.image.tag }}
-        {{- if and .Values.secrets.enabled .Values.argocd.app.helm.envSecretParam }}
+        {{- end }}
+        {{- if $setEnvSecretParameter }}
         - name: {{ .Values.argocd.app.helm.envSecretParam }}
           value: {{ .Values.secrets.name }}
         {{- end }}
+      {{- end }}
   syncPolicy:
     automated:
       prune: {{ .Values.syncPolicy.automated.prune }}

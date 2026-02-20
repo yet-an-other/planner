@@ -8,7 +8,8 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
 COPY . .
-RUN pnpm build
+ARG VITE_APP_VERSION=sha-dev
+RUN VITE_APP_VERSION="$VITE_APP_VERSION" pnpm build
 
 FROM nginx:1.27-alpine AS runtime
 

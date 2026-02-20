@@ -36,6 +36,7 @@ argocd:
     helm:
       valueFiles:
         - values.yaml
+      setImageParameters: false
       imageRepositoryParam: image.repository
       imageTagParam: image.tag
       envSecretParam: env.existingSecret

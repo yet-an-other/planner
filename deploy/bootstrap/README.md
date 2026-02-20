@@ -40,3 +40,9 @@ Optional flags:
 - Do not commit real secrets in Git.
 - Keep `planner.env` outside the repo, with strict file permissions.
 - Rotate credentials periodically.
+
+## Image Update Flow
+
+- Docker publish workflow builds `sha-<commit>` images and pushes multi-arch manifests.
+- The same workflow updates `deploy/charts/planner/values.yaml` with that immutable tag.
+- Argo CD then picks up the Git change and deploys the new image on sync.
