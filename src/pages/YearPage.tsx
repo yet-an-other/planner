@@ -100,8 +100,8 @@ export function YearPage() {
 
   return (
     <div className="relative min-h-screen overflow-hidden">
-      <div className="pointer-events-none absolute -left-20 top-12 h-64 w-64 rounded-full bg-lime-200/70 blur-3xl" />
-      <div className="pointer-events-none absolute right-0 top-1/2 h-72 w-72 rounded-full bg-emerald-100/80 blur-3xl" />
+      <div className="pointer-events-none absolute -left-20 top-12 hidden h-64 w-64 rounded-full bg-lime-200/70 blur-3xl sm:block" />
+      <div className="pointer-events-none absolute right-0 top-1/2 hidden h-72 w-72 rounded-full bg-emerald-100/80 blur-3xl sm:block" />
 
       <main className="flex h-[100dvh] w-full flex-col pt-4 sm:pt-6">
         <header className="mb-3 grid shrink-0 grid-cols-[1fr_auto_1fr] items-start gap-3 px-2 sm:mb-4 sm:gap-4 sm:px-4 md:px-8">
@@ -193,7 +193,7 @@ export function YearPage() {
 
         <section className="flex min-h-0 w-full flex-1 flex-col overflow-hidden">
           <div className="min-h-0 overflow-y-auto">
-            <div className="sticky top-0 z-10 grid grid-cols-7 border-b border-slate-300 bg-slate-100/95 backdrop-blur">
+            <div className="sticky top-0 z-10 grid grid-cols-7 border-b border-slate-300 bg-slate-100/95 backdrop-blur-none sm:backdrop-blur">
               {WEEKDAYS.map((weekday, index) => (
                 <div
                   className={`px-1 py-2 text-center font-display text-[11px] text-slate-700 sm:px-2 sm:py-3 sm:text-sm ${
@@ -218,7 +218,7 @@ export function YearPage() {
                 const barsTopClass = monthStartIndex >= 0 ? 'top-6 sm:top-9' : 'top-5 sm:top-9'
 
                 return (
-                  <div className="relative" key={`${calendarYear}-week-${weekIndex}`}>
+                  <div className="week-row relative" key={`${calendarYear}-week-${weekIndex}`}>
                     <div
                       className={`grid grid-cols-7 ${
                         hasHorizontalMonthDivider
@@ -239,24 +239,22 @@ export function YearPage() {
                             ? 'border-l-0'
                             : 'border-l border-slate-200'
 
-                        const barsActiveToday = weekBars.filter(
-                          (bar) => bar.startIdx <= dayIndex && bar.endIdx >= dayIndex,
-                        )
-                        const activeBarsToday = barsActiveToday.length
+                        const barsActiveTodayCount = weekData.activeBarsByDateKey[cellKey] ?? 0
+                        const activeBarsTodaySafe = Math.max(0, barsActiveTodayCount)
                         const shortEvents = weekData.shortEventsByDateKey[cellKey] ?? []
                         const overflowBars = weekData.overflowBarsByDateKey[cellKey] ?? 0
                         const timedEventsOffsetClass =
-                          activeBarsToday >= 3
+                          activeBarsTodaySafe >= 3
                             ? 'mt-14 sm:mt-16'
-                            : activeBarsToday === 2
+                            : activeBarsTodaySafe === 2
                               ? 'mt-9 sm:mt-11'
-                              : activeBarsToday === 1
+                              : activeBarsTodaySafe === 1
                                 ? 'mt-5 sm:mt-6'
                                 : ''
 
                         return (
                           <div
-                            className={`relative min-h-[88px] px-1 py-1 transition sm:min-h-[122px] sm:px-3 sm:py-2 ${leftBorderClass} ${
+                            className={`relative min-h-[88px] px-1 py-1 sm:transition sm:min-h-[122px] sm:px-3 sm:py-2 ${leftBorderClass} ${
                               dayIndex >= 5 ? 'bg-slate-100/55' : 'bg-white/65'
                             } ${
                               isCurrentYear ? 'text-slate-800' : 'text-slate-400'
@@ -290,7 +288,7 @@ export function YearPage() {
 
                                 {shortEvents.slice(0, MAX_VISIBLE_TIMED).map((event) => (
                                   <button
-                                    className="flex h-4 w-full min-w-0 items-center gap-1 border-0 bg-transparent pl-1 pr-2 text-left text-[8px] leading-4 text-slate-700 transition hover:bg-slate-100/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-slate-900 sm:h-5 sm:pl-2 sm:pr-3 sm:text-[11px] sm:leading-5"
+                                    className="flex h-4 w-full min-w-0 items-center gap-1 border-0 bg-transparent pl-1 pr-2 text-left text-[8px] leading-4 text-slate-700 sm:transition hover:bg-slate-100/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-slate-900 sm:h-5 sm:pl-2 sm:pr-3 sm:text-[11px] sm:leading-5"
                                     key={`${event.id}-${cellKey}-short`}
                                     onClick={() => {
                                       openEventDetails(event)
@@ -336,7 +334,7 @@ export function YearPage() {
 
                         return (
                           <button
-                            className={`pointer-events-auto absolute h-4 overflow-hidden border-0 px-1 text-left text-[8px] font-medium leading-4 text-white transition hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-slate-900 sm:h-5 sm:px-2 sm:text-[11px] sm:leading-5 ${laneTopClass} ${roundedLeftClass} ${roundedRightClass}`}
+                            className={`pointer-events-auto absolute h-4 overflow-hidden border-0 px-1 text-left text-[8px] font-medium leading-4 text-white sm:transition hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-slate-900 sm:h-5 sm:px-2 sm:text-[11px] sm:leading-5 ${laneTopClass} ${roundedLeftClass} ${roundedRightClass}`}
                             key={`${bar.event.id}-${bar.lane}-${weekIndex}`}
                             onClick={() => {
                               openEventDetails(bar.event)

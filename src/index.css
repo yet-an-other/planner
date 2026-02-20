@@ -73,7 +73,13 @@
       radial-gradient(circle at 10% 18%, rgba(208, 223, 159, 0.48), transparent 34%),
       radial-gradient(circle at 86% 45%, rgba(196, 214, 150, 0.42), transparent 38%),
       linear-gradient(180deg, #f8f9f2 0%, #edf0e4 100%);
-    background-attachment: fixed;
+    background-attachment: scroll;
+  }
+
+  @media (min-width: 640px) {
+    body {
+      background-attachment: fixed;
+    }
   }
 }
 
@@ -81,5 +87,16 @@
   .font-display {
     font-family: var(--font-display);
     letter-spacing: -0.02em;
+  }
+
+  .week-row {
+    content-visibility: auto;
+    contain-intrinsic-size: 130px;
+  }
+
+  @media (min-width: 640px) {
+    .week-row {
+      contain-intrinsic-size: 170px;
+    }
   }
 }
