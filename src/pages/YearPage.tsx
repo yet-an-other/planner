@@ -56,6 +56,7 @@ export function YearPage() {
   const previousYear = calendarYear > 1 ? calendarYear - 1 : 1
   const nextYear = calendarYear < 9999 ? calendarYear + 1 : 9999
   const userLabel = profile?.name ?? profile?.email ?? 'Google account'
+  const appVersion = __APP_VERSION__
   const openEventDetails = useCallback(
     (event: CalendarEvent) => {
       setSelectedEvent(event)
@@ -109,6 +110,7 @@ export function YearPage() {
             <p className="font-display text-[10px] uppercase tracking-[0.18em] text-slate-500 sm:text-sm sm:tracking-[0.22em]">
               The Planner
             </p>
+            <p className="font-mono text-[9px] text-slate-500/90 sm:text-[10px]">{appVersion}</p>
           </div>
 
           <div className="flex items-center gap-1 sm:gap-1.5">
@@ -212,20 +214,13 @@ export function YearPage() {
                   const cellKey = formatDateKey(date)
                   return Boolean(monthStartLabels[cellKey])
                 })
-                const hasHorizontalMonthDivider = monthStartIndex === 0
                 const weekData = weekRenderData[weekIndex]
                 const weekBars = weekData.weekBars
                 const barsTopClass = monthStartIndex >= 0 ? 'top-6 sm:top-9' : 'top-5 sm:top-9'
 
                 return (
                   <div className="week-row relative" key={`${calendarYear}-week-${weekIndex}`}>
-                    <div
-                      className={`grid grid-cols-7 ${
-                        hasHorizontalMonthDivider
-                          ? 'border-t-2 border-t-slate-700 sm:border-t-4'
-                          : ''
-                      }`}
-                    >
+                    <div className="grid grid-cols-7">
                       {week.map((date, dayIndex) => {
                         const cellKey = formatDateKey(date)
                         const isCurrentYear = date.getFullYear() === calendarYear
