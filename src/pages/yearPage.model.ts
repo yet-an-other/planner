@@ -94,11 +94,34 @@ export function formatEventTime(date: Date): string {
   return TIME_FORMATTER.format(date)
 }
 
+export function formatEventDateTime(date: Date): string {
+  const day = String(date.getDate()).padStart(2, '0')
+  const month = MONTH_ABBREVIATIONS[date.getMonth()]
+  const year = date.getFullYear()
+  const hour = String(date.getHours()).padStart(2, '0')
+  const minute = String(date.getMinutes()).padStart(2, '0')
+  return `${day} ${month} ${year} ${hour}:${minute}`
+}
+
 const TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
   hour: '2-digit',
   minute: '2-digit',
   hour12: false,
 })
+const MONTH_ABBREVIATIONS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+] as const
 
 const RGBA_CACHE = new Map<string, string>()
 

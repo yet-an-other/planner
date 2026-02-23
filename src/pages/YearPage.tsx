@@ -13,6 +13,7 @@ import {
   buildWeekRenderData,
   buildYearWeeks,
   formatDateKey,
+  formatEventDateTime,
   formatEventTime,
   isValidYear,
   parseApiEvent,
@@ -339,7 +340,7 @@ export function YearPage() {
                               width: `${(span / 7) * 100}%`,
                               backgroundColor: toRgba(bar.event.color, 1),
                             }}
-                            title={`${bar.event.summary} (${bar.event.start.toISOString()} - ${bar.event.end.toISOString()})`}
+                            title={`${bar.event.summary}\n${formatEventDateTime(bar.event.start)} - ${formatEventDateTime(bar.event.end)}`}
                             type="button"
                           >
                             <span className="block truncate">{bar.event.summary}</span>
