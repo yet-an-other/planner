@@ -101,7 +101,7 @@ export function YearPage() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden">
+    <div className="relative min-h-screen overflow-hidden bg-[#f0f5ef]">
       <div className="pointer-events-none absolute -left-20 top-12 hidden h-64 w-64 rounded-full bg-lime-200/70 blur-3xl sm:block" />
       <div className="pointer-events-none absolute right-0 top-1/2 hidden h-72 w-72 rounded-full bg-emerald-100/80 blur-3xl sm:block" />
 
@@ -196,11 +196,11 @@ export function YearPage() {
 
         <section className="flex min-h-0 w-full flex-1 flex-col overflow-hidden">
           <div className="min-h-0 overflow-y-auto">
-            <div className="sticky top-0 z-10 grid grid-cols-7 border-b border-slate-300 bg-slate-100/95 backdrop-blur-none sm:backdrop-blur">
+            <div className="sticky top-0 z-10 grid grid-cols-7 border-b border-[#9db2a1] bg-[#dbe7da]/95 backdrop-blur-none sm:backdrop-blur">
               {WEEKDAYS.map((weekday, index) => (
                 <div
-                  className={`px-1 py-2 text-center font-display text-[11px] text-slate-700 sm:px-2 sm:py-3 sm:text-sm ${
-                    index >= 5 ? 'bg-slate-200/70' : ''
+                  className={`px-1 py-2 text-center font-display text-[11px] text-[#34483b] sm:px-2 sm:py-3 sm:text-sm ${
+                    index >= 5 ? 'bg-[#cfdecd]/80' : ''
                   }`}
                   key={weekday}
                 >
