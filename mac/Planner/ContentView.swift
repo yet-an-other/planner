@@ -3,6 +3,7 @@ import UIKit
 
 struct ContentView: View {
     @EnvironmentObject private var viewModel: PlannerViewModel
+    @State private var didInitialScrollToToday = false
 
     private var weeks: [[Date]] {
         YearLayout.buildYearWeeks(year: viewModel.calendarYear)
@@ -18,6 +19,16 @@ struct ContentView: View {
 
     private var todayKey: String {
         YearLayout.formatDateKey(Date())
+    }
+
+    private var todayWeekIndex: Int? {
+        guard viewModel.calendarYear == Calendar.current.component(.year, from: Date()) else {
+            return nil
+        }
+
+        return weeks.firstIndex(where: { week in
+            week.contains(where: { YearLayout.formatDateKey($0) == todayKey })
+        })
     }
 
     var body: some View {
@@ -39,31 +50,45 @@ struct ContentView: View {
                     Divider()
                         .overlay(Color.black.opacity(0.10))
 
-                    ScrollView {
-                        LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
-                            Section {
-                                ForEach(Array(weeks.enumerated()), id: \.offset) { index, week in
-                                    WeekRowView(
-                                        week: week,
-                                        weekData: weekRenderData[index],
-                                        calendarYear: viewModel.calendarYear,
-                                        todayKey: todayKey,
-                                        monthStartLabels: monthStartLabels,
-                                        onTapEvent: { event in
-                                            viewModel.openEventDetails(event)
+                    ScrollViewReader { scrollProxy in
+                        ScrollView {
+                            LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+                                Section {
+                                    ForEach(Array(weeks.enumerated()), id: \.offset) { index, week in
+                                        WeekRowView(
+                                            week: week,
+                                            weekData: weekRenderData[index],
+                                            calendarYear: viewModel.calendarYear,
+                                            todayKey: todayKey,
+                                            monthStartLabels: monthStartLabels,
+                                            onTapEvent: { event in
+                                                viewModel.openEventDetails(event)
+                                            }
+                                        )
+                                        .id(index)
+                                        .overlay(alignment: .bottom) {
+                                            Rectangle()
+                                                .fill(Color.black.opacity(0.08))
+                                                .frame(height: 0.5)
                                         }
-                                    )
-                                    .overlay(alignment: .bottom) {
-                                        Rectangle()
-                                            .fill(Color.black.opacity(0.08))
-                                            .frame(height: 0.5)
                                     }
+                                } header: {
+                                    WeekdayHeaderView()
                                 }
-                            } header: {
-                                WeekdayHeaderView()
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                        .onAppear {
+                            guard !didInitialScrollToToday,
+                                  let targetWeekIndex = todayWeekIndex else {
+                                return
+                            }
+
+                            didInitialScrollToToday = true
+                            DispatchQueue.main.async {
+                                scrollProxy.scrollTo(targetWeekIndex, anchor: .center)
                             }
                         }
-                        .frame(maxWidth: .infinity)
                     }
                 }
                 .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)

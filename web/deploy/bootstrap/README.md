@@ -12,13 +12,13 @@ Argo CD itself is not installed by this bootstrap.
 ## Usage
 
 ```bash
-deploy/bootstrap/bootstrap.sh <cluster-name>
+web/deploy/bootstrap/bootstrap.sh <cluster-name>
 ```
 
 Example:
 
 ```bash
-deploy/bootstrap/bootstrap.sh proxmox
+web/deploy/bootstrap/bootstrap.sh proxmox
 ```
 
 Optional flags:
@@ -31,7 +31,7 @@ Optional flags:
 ## Inputs
 
 - Kubeconfig: `$HOME/remote-kube/<cluster-name>/config`
-- Cluster values: `deploy/bootstrap/values/<cluster-name>.yaml`
+- Cluster values: `web/deploy/bootstrap/values/<cluster-name>.yaml`
 - Runtime env vars file:
   `KEY=VALUE` lines loaded into the Kubernetes Secret
 - Existing Argo CD installation in the target cluster (default namespace: `argocd`)
@@ -51,5 +51,5 @@ identities that are not part of this app's Git source.
 ## Image Update Flow
 
 - Docker publish workflow builds `sha-<commit>` images and pushes multi-arch manifests.
-- The same workflow updates `deploy/charts/planner/values.yaml` with that immutable tag.
+- The same workflow updates `web/deploy/charts/planner/values.yaml` with that immutable tag.
 - Argo CD then picks up the Git change and deploys the new image on sync.

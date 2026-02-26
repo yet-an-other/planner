@@ -85,6 +85,10 @@ export function EventDetailsDialog({ event, onClose }: EventDetailsDialogProps) 
 
   const descriptionLinks = Array.from(new Set(event.description.match(URL_PATTERN) ?? []))
   const emailLink = descriptionLinks.find((link) => /mail\.google\.com\/mail/i.test(link)) ?? null
+  const locationText = event.location.trim()
+  const locationMapURL = locationText
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationText)}`
+    : null
   const filteredLinks = descriptionLinks.filter(
     (link) => !/g\.co\/calendar/i.test(link) && !/mail\.google\.com\/mail/i.test(link),
   )
@@ -128,7 +132,7 @@ export function EventDetailsDialog({ event, onClose }: EventDetailsDialogProps) 
 
           <button
             aria-label="Close event details"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-200/70 hover:text-slate-800"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full p-0 leading-none text-slate-500 transition hover:bg-slate-200/70 hover:text-slate-800"
             onClick={onClose}
             type="button"
           >
@@ -144,7 +148,20 @@ export function EventDetailsDialog({ event, onClose }: EventDetailsDialogProps) 
 
           <div className="flex gap-3">
             <dt className="w-16 shrink-0 text-slate-500">Where</dt>
-            <dd className="min-w-0 break-words">{event.location || 'No location'}</dd>
+            <dd className="min-w-0 break-words">
+              {locationMapURL ? (
+                <a
+                  className="underline decoration-emerald-600 underline-offset-2 transition hover:text-emerald-900"
+                  href={locationMapURL}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  {locationText}
+                </a>
+              ) : (
+                'No location'
+              )}
+            </dd>
           </div>
 
           {event.status ? (

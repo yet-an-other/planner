@@ -139,21 +139,21 @@ jobs:
           IMAGE_NAME: ${{ steps.image.outputs.name }}
           SHORT_SHA: ${{ steps.vars.outputs.short_sha }}
         run: |
-          sed -i -E "s|^  repository:.*$|  repository: ${IMAGE_NAME}|" deploy/charts/planner/values.yaml
-          sed -i -E "s|^  tag:.*$|  tag: sha-${SHORT_SHA}|" deploy/charts/planner/values.yaml
+          sed -i -E "s|^  repository:.*$|  repository: ${IMAGE_NAME}|" web/deploy/charts/planner/values.yaml
+          sed -i -E "s|^  tag:.*$|  tag: sha-${SHORT_SHA}|" web/deploy/charts/planner/values.yaml
 
       - name: Commit planner chart image update
         env:
           SHORT_SHA: ${{ steps.vars.outputs.short_sha }}
         run: |
-          if git diff --quiet -- deploy/charts/planner/values.yaml; then
+          if git diff --quiet -- web/deploy/charts/planner/values.yaml; then
             echo "Chart already points to sha-${SHORT_SHA}; nothing to commit."
             exit 0
           fi
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add deploy/charts/planner/values.yaml
+          git add web/deploy/charts/planner/values.yaml
           git commit -m "chore(deploy): bump planner image to sha-${SHORT_SHA}"
           git pull --rebase origin main
           git push origin HEAD:main

@@ -30,7 +30,7 @@ argocd:
     project: planner
     repoURL: https://github.com/yet-an-other/planner.git
     targetRevision: main
-    path: deploy/charts/planner
+    path: web/deploy/charts/planner
     destinationServer: https://kubernetes.default.svc
     destinationNamespace: planner
     helm:
