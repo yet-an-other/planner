@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, CircleUserRound, LogOut } from 'lucide-react'
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { GoogleCalendarClient } from '../lib/google/googleCalendarClient'
@@ -35,6 +35,8 @@ export function YearPage() {
   const { authError, profile, session, signIn, signOut, status } = useGoogleAuth()
   const { events, loading, fetchError } = useYearEvents(calendarYear, session)
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
+  const didInitialScrollRef = useRef(false)
   const calendarClient = useMemo(() => {
     if (!session) {
       return null
@@ -95,6 +97,36 @@ export function YearPage() {
     },
     [calendarClient],
   )
+
+  useEffect(() => {
+    if (didInitialScrollRef.current) {
+      return
+    }
+
+    const scrollContainer = scrollContainerRef.current
+    if (!scrollContainer) {
+      return
+    }
+
+    const targetCell = scrollContainer.querySelector<HTMLElement>(`[data-date-key="${todayKey}"]`)
+    if (!targetCell) {
+      return
+    }
+
+    didInitialScrollRef.current = true
+
+    requestAnimationFrame(() => {
+      const containerRect = scrollContainer.getBoundingClientRect()
+      const targetRect = targetCell.getBoundingClientRect()
+      const deltaY =
+        targetRect.top - containerRect.top + targetRect.height / 2 - scrollContainer.clientHeight / 2
+
+      scrollContainer.scrollTo({
+        top: scrollContainer.scrollTop + deltaY,
+        behavior: 'auto',
+      })
+    })
+  }, [todayKey, weeks.length])
 
   if (!hasValidYear) {
     return <Navigate replace to={`/year/${currentYear}`} />
@@ -195,7 +227,7 @@ export function YearPage() {
         </header>
 
         <section className="flex min-h-0 w-full flex-1 flex-col overflow-hidden">
-          <div className="min-h-0 overflow-y-auto">
+          <div className="min-h-0 overflow-y-auto" ref={scrollContainerRef}>
             <div className="sticky top-0 z-10 grid grid-cols-7 border-b border-[#9db2a1] bg-[#dbe7da]/95 backdrop-blur-none sm:backdrop-blur">
               {WEEKDAYS.map((weekday, index) => (
                 <div
@@ -255,6 +287,7 @@ export function YearPage() {
                             } ${
                               isCurrentYear ? 'text-slate-800' : 'text-slate-400'
                             }`}
+                            data-date-key={cellKey}
                             key={cellKey}
                           >
                             {isMonthStart ? (

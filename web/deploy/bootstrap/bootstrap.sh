@@ -7,7 +7,7 @@ CHART_DIR="${SCRIPT_DIR}/chart"
 usage() {
   cat <<'USAGE'
 Usage:
-  deploy/bootstrap/bootstrap.sh <cluster-name> [--env-file <path>] [--release <name>] [--argocd-namespace <name>] [--dry-run]
+  web/deploy/bootstrap/bootstrap.sh <cluster-name> [--env-file <path>] [--release <name>] [--argocd-namespace <name>] [--dry-run]
 
 Description:
   Bootstraps planner deployment objects into a target cluster using Helm,
@@ -20,7 +20,7 @@ Cluster kubeconfig is resolved as:
   $HOME/remote-kube/<cluster-name>/config
 
 Cluster values file is resolved as:
-  deploy/bootstrap/values/<cluster-name>.yaml
+  web/deploy/bootstrap/values/<cluster-name>.yaml
 
 Environment variables are loaded from:
   --env-file (if provided), otherwise $HOME/remote-kube/<cluster-name>/planner.env
@@ -170,7 +170,7 @@ fi
 
 if [[ ! -f "${cluster_values_file}" ]]; then
   echo "Cluster values file not found: ${cluster_values_file}" >&2
-  echo "Create it based on deploy/bootstrap/values/proxmox.yaml or hetzner.yaml." >&2
+  echo "Create it based on web/deploy/bootstrap/values/proxmox.yaml or hetzner.yaml." >&2
   exit 1
 fi
 
