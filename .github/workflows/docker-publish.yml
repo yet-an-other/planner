@@ -60,8 +60,8 @@ jobs:
       - name: Build and push single-arch image
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: ./Dockerfile
+          context: ./web
+          file: ./web/Dockerfile
           platforms: ${{ matrix.platform }}
           push: true
           build-args: |
