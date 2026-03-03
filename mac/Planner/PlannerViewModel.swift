@@ -1,4 +1,5 @@
 import Foundation
+import Security
 
 @MainActor
 final class PlannerViewModel: ObservableObject {
@@ -20,6 +21,13 @@ final class PlannerViewModel: ObservableObject {
     private var session: GoogleAuthSession?
     private let oauthService = GoogleOAuthService()
     private let calendarService = GoogleCalendarService()
+    private let authStore = PersistedAuthStore()
+
+    init() {
+        Task {
+            await restorePersistedAuthentication()
+        }
+    }
 
     var userLabel: String {
         profile?.name ?? profile?.email ?? "Google account"
@@ -61,13 +69,7 @@ final class PlannerViewModel: ObservableObject {
     func signOut() {
         Task {
             let currentSession = session
-            session = nil
-            profile = nil
-            events = []
-            loadingEvents = false
-            fetchError = nil
-            authError = nil
-            authStatus = .unauthenticated
+            clearAuthenticationState(errorMessage: nil)
             await oauthService.signOut(session: currentSession)
         }
     }
@@ -92,18 +94,19 @@ final class PlannerViewModel: ObservableObject {
 
             session = nextSession
             profile = nextProfile
+            authStore.saveSession(nextSession)
+            authStore.saveProfile(nextProfile)
             authStatus = .authenticated
             await loadEvents()
         } catch {
-            session = nil
-            profile = nil
-            authStatus = .unauthenticated
-            authError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            clearAuthenticationState(
+                errorMessage: (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            )
         }
     }
 
     private func loadEvents() async {
-        guard let activeSession = session else {
+        guard session != nil else {
             events = []
             loadingEvents = false
             return
@@ -113,6 +116,7 @@ final class PlannerViewModel: ObservableObject {
         fetchError = nil
 
         do {
+            let activeSession = try await sessionForCalendarRequests()
             let fetched = try await calendarService.getEventsForYear(
                 year: calendarYear,
                 accessToken: activeSession.accessToken,
@@ -120,10 +124,189 @@ final class PlannerViewModel: ObservableObject {
             )
             events = fetched
             loadingEvents = false
+        } catch CalendarError.sessionExpired {
+            await retryLoadEventsAfterUnauthorized()
         } catch {
             loadingEvents = false
             events = []
-            fetchError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            if error is SessionPersistenceError || error is OAuthError {
+                clearAuthenticationState(
+                    errorMessage: (error as? LocalizedError)?.errorDescription ?? "Google session expired. Please sign in again."
+                )
+            } else {
+                fetchError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            }
         }
+    }
+
+    private func restorePersistedAuthentication() async {
+        guard let savedSession = authStore.loadSession() else {
+            return
+        }
+
+        authStatus = .loading
+        authError = nil
+        fetchError = nil
+        session = savedSession
+        profile = authStore.loadProfile()
+
+        do {
+            let activeSession = try await sessionForCalendarRequests()
+            if profile == nil {
+                if let fetchedProfile = try? await oauthService.fetchUserProfile(session: activeSession) {
+                    profile = fetchedProfile
+                    authStore.saveProfile(fetchedProfile)
+                }
+            }
+
+            authStatus = .authenticated
+            await loadEvents()
+        } catch {
+            clearAuthenticationState(errorMessage: nil)
+        }
+    }
+
+    private func retryLoadEventsAfterUnauthorized() async {
+        do {
+            let refreshedSession = try await sessionForCalendarRequests(forceRefresh: true)
+            let fetched = try await calendarService.getEventsForYear(
+                year: calendarYear,
+                accessToken: refreshedSession.accessToken,
+                calendarID: GoogleConfig.calendarID
+            )
+            events = fetched
+            loadingEvents = false
+            fetchError = nil
+        } catch {
+            loadingEvents = false
+            events = []
+            clearAuthenticationState(
+                errorMessage: (error as? LocalizedError)?.errorDescription ?? "Google session expired. Please sign in again."
+            )
+        }
+    }
+
+    private func sessionForCalendarRequests(forceRefresh: Bool = false) async throws -> GoogleAuthSession {
+        guard let activeSession = session else {
+            throw SessionPersistenceError.missingSession
+        }
+
+        if !forceRefresh, activeSession.expiresAt > Date() {
+            return activeSession
+        }
+
+        return try await refreshSession()
+    }
+
+    private func refreshSession() async throws -> GoogleAuthSession {
+        guard let currentSession = session else {
+            throw SessionPersistenceError.missingSession
+        }
+
+        guard let refreshToken = currentSession.refreshToken, !refreshToken.isEmpty else {
+            throw SessionPersistenceError.missingRefreshToken
+        }
+
+        let refreshedSession = try await oauthService.refreshSession(refreshToken: refreshToken)
+        session = refreshedSession
+        authStore.saveSession(refreshedSession)
+        return refreshedSession
+    }
+
+    private func clearAuthenticationState(errorMessage: String?) {
+        session = nil
+        profile = nil
+        events = []
+        loadingEvents = false
+        fetchError = nil
+        authError = errorMessage
+        authStatus = .unauthenticated
+        authStore.clear()
+    }
+}
+
+private enum SessionPersistenceError: LocalizedError {
+    case missingSession
+    case missingRefreshToken
+
+    var errorDescription: String? {
+        switch self {
+        case .missingSession:
+            return "Google session is missing. Please sign in again."
+        case .missingRefreshToken:
+            return "Google session expired. Please sign in again."
+        }
+    }
+}
+
+private struct PersistedAuthStore {
+    private let decoder = JSONDecoder()
+    private let encoder = JSONEncoder()
+    private let profileKey = "planner.google.user.profile"
+    private let keychainService = Bundle.main.bundleIdentifier.map { "\($0).auth" } ?? "planner.auth"
+    private let keychainAccount = "google.auth.session"
+
+    func saveSession(_ session: GoogleAuthSession) {
+        guard let data = try? encoder.encode(session) else {
+            return
+        }
+
+        let query = keychainBaseQuery
+        let updateAttributes: [String: Any] = [
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        ]
+
+        let status = SecItemUpdate(query as CFDictionary, updateAttributes as CFDictionary)
+        if status == errSecItemNotFound {
+            var insertQuery = query
+            insertQuery[kSecValueData as String] = data
+            insertQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            SecItemAdd(insertQuery as CFDictionary, nil)
+        }
+    }
+
+    func loadSession() -> GoogleAuthSession? {
+        var query = keychainBaseQuery
+        query[kSecReturnData as String] = kCFBooleanTrue
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        guard status == errSecSuccess,
+              let data = item as? Data else {
+            return nil
+        }
+
+        return try? decoder.decode(GoogleAuthSession.self, from: data)
+    }
+
+    func saveProfile(_ profile: GoogleUserProfile) {
+        guard let data = try? encoder.encode(profile) else {
+            return
+        }
+
+        UserDefaults.standard.set(data, forKey: profileKey)
+    }
+
+    func loadProfile() -> GoogleUserProfile? {
+        guard let data = UserDefaults.standard.data(forKey: profileKey) else {
+            return nil
+        }
+
+        return try? decoder.decode(GoogleUserProfile.self, from: data)
+    }
+
+    func clear() {
+        UserDefaults.standard.removeObject(forKey: profileKey)
+        SecItemDelete(keychainBaseQuery as CFDictionary)
+    }
+
+    private var keychainBaseQuery: [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: keychainService,
+            kSecAttrAccount as String: keychainAccount
+        ]
     }
 }
