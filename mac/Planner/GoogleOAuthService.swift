@@ -16,14 +16,15 @@ private let oauthScopes = [
     "https://www.googleapis.com/auth/calendar.readonly"
 ].joined(separator: " ")
 
-struct GoogleAuthSession {
+struct GoogleAuthSession: Codable {
     let accessToken: String
+    let refreshToken: String?
     let tokenType: String
     let scope: String
     let expiresAt: Date
 }
 
-struct GoogleUserProfile {
+struct GoogleUserProfile: Codable {
     let id: String
     let email: String?
     let name: String?
@@ -90,6 +91,7 @@ final class GoogleOAuthService {
             URLQueryItem(name: "response_type", value: "code"),
             URLQueryItem(name: "scope", value: oauthScopes),
             URLQueryItem(name: "state", value: state),
+            URLQueryItem(name: "access_type", value: "offline"),
             URLQueryItem(name: "prompt", value: "select_account"),
             URLQueryItem(name: "include_granted_scopes", value: "true"),
             URLQueryItem(name: "code_challenge", value: codeChallenge),
@@ -150,6 +152,53 @@ final class GoogleOAuthService {
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
 
         _ = try? await URLSession.shared.data(for: request)
+    }
+
+    func refreshSession(refreshToken: String) async throws -> GoogleAuthSession {
+        try GoogleConfig.validate()
+
+        guard let url = URL(string: tokenEndpoint) else {
+            throw OAuthError.configuration("Google token endpoint URL is invalid.")
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+
+        let bodyItems = [
+            URLQueryItem(name: "client_id", value: GoogleConfig.clientID),
+            URLQueryItem(name: "grant_type", value: "refresh_token"),
+            URLQueryItem(name: "refresh_token", value: refreshToken)
+        ]
+
+        var bodyComponents = URLComponents()
+        bodyComponents.queryItems = bodyItems
+        request.httpBody = bodyComponents.percentEncodedQuery?.data(using: .utf8)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw OAuthError.network("Could not read Google token response.")
+        }
+
+        guard (200...299).contains(httpResponse.statusCode) else {
+            let message = String(data: data, encoding: .utf8) ?? ""
+            throw OAuthError.network("Google token refresh failed (\(httpResponse.statusCode)). \(message)")
+        }
+
+        let payload = try JSONDecoder().decode(TokenResponse.self, from: data)
+        guard let accessToken = payload.accessToken,
+              let expiresIn = payload.expiresIn,
+              expiresIn > 0 else {
+            throw OAuthError.network("Google token response was incomplete.")
+        }
+
+        return GoogleAuthSession(
+            accessToken: accessToken,
+            refreshToken: payload.refreshToken ?? refreshToken,
+            tokenType: payload.tokenType ?? "Bearer",
+            scope: payload.scope ?? oauthScopes,
+            expiresAt: Date().addingTimeInterval(TimeInterval(max(1, expiresIn - 30)))
+        )
     }
 
     private func startWebAuthentication(url: URL, expectedState: String) async throws -> URL {
@@ -233,6 +282,7 @@ final class GoogleOAuthService {
 
         return GoogleAuthSession(
             accessToken: accessToken,
+            refreshToken: payload.refreshToken,
             tokenType: payload.tokenType ?? "Bearer",
             scope: payload.scope ?? oauthScopes,
             expiresAt: Date().addingTimeInterval(TimeInterval(max(1, expiresIn - 30)))
@@ -276,12 +326,14 @@ enum OAuthError: LocalizedError {
 
 private struct TokenResponse: Decodable {
     let accessToken: String?
+    let refreshToken: String?
     let expiresIn: Int?
     let tokenType: String?
     let scope: String?
 
     enum CodingKeys: String, CodingKey {
         case accessToken = "access_token"
+        case refreshToken = "refresh_token"
         case expiresIn = "expires_in"
         case tokenType = "token_type"
         case scope
