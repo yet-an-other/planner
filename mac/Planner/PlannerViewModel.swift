@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import UIKit
 
 @MainActor
 final class PlannerViewModel: ObservableObject {
@@ -18,12 +19,18 @@ final class PlannerViewModel: ObservableObject {
     @Published var selectedEvent: CalendarEvent?
     @Published var calendarYear: Int = Calendar.current.component(.year, from: Date())
 
+    private static let autoRefreshIntervalSeconds: UInt64 = 60
+
     private var session: GoogleAuthSession?
     private let oauthService = GoogleOAuthService()
     private let calendarService = GoogleCalendarService()
     private let authStore = PersistedAuthStore()
+    private var appIsActive = true
+    private var lifecycleObservers: [NSObjectProtocol] = []
+    private var autoRefreshTask: Task<Void, Never>?
 
     init() {
+        configureLifecycleObservers()
         Task {
             await restorePersistedAuthentication()
         }
@@ -75,7 +82,7 @@ final class PlannerViewModel: ObservableObject {
     }
 
     func loadEventsIfAuthenticated() {
-        guard session != nil else {
+        guard session != nil, !loadingEvents else {
             return
         }
 
@@ -97,6 +104,7 @@ final class PlannerViewModel: ObservableObject {
             authStore.saveSession(nextSession)
             authStore.saveProfile(nextProfile)
             authStatus = .authenticated
+            startAutoRefreshIfNeeded()
             await loadEvents()
         } catch {
             clearAuthenticationState(
@@ -160,6 +168,7 @@ final class PlannerViewModel: ObservableObject {
             }
 
             authStatus = .authenticated
+            startAutoRefreshIfNeeded()
             await loadEvents()
         } catch {
             clearAuthenticationState(errorMessage: nil)
@@ -214,6 +223,7 @@ final class PlannerViewModel: ObservableObject {
     }
 
     private func clearAuthenticationState(errorMessage: String?) {
+        stopAutoRefresh()
         session = nil
         profile = nil
         events = []
@@ -222,6 +232,86 @@ final class PlannerViewModel: ObservableObject {
         authError = errorMessage
         authStatus = .unauthenticated
         authStore.clear()
+    }
+
+    private func configureLifecycleObservers() {
+        let center = NotificationCenter.default
+
+        let didBecomeActive = center.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else {
+                return
+            }
+
+            Task { @MainActor in
+                self.appIsActive = true
+                self.startAutoRefreshIfNeeded()
+                self.loadEventsIfAuthenticated()
+            }
+        }
+
+        let didEnterBackground = center.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else {
+                return
+            }
+
+            Task { @MainActor in
+                self.appIsActive = false
+                self.stopAutoRefresh()
+            }
+        }
+
+        lifecycleObservers = [didBecomeActive, didEnterBackground]
+    }
+
+    private func startAutoRefreshIfNeeded() {
+        guard appIsActive, authStatus == .authenticated else {
+            return
+        }
+
+        guard autoRefreshTask == nil else {
+            return
+        }
+
+        autoRefreshTask = Task { [weak self] in
+            guard let self else {
+                return
+            }
+
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(nanoseconds: Self.autoRefreshIntervalSeconds * 1_000_000_000)
+                } catch {
+                    return
+                }
+
+                guard !Task.isCancelled else {
+                    return
+                }
+
+                await self.performAutoRefreshTick()
+            }
+        }
+    }
+
+    private func stopAutoRefresh() {
+        autoRefreshTask?.cancel()
+        autoRefreshTask = nil
+    }
+
+    private func performAutoRefreshTick() async {
+        guard appIsActive, authStatus == .authenticated, !loadingEvents else {
+            return
+        }
+
+        await loadEvents()
     }
 }
 
