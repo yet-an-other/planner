@@ -300,6 +300,11 @@ private struct WeekRowView: View {
         monthStartIndex >= 0 ? 26 : 22
     }
 
+    private var visibleWeekBarRows: Int {
+        let highestLane = weekData.weekBars.map(\.lane).max() ?? -1
+        return min(MAX_VISIBLE_BARS, max(0, highestLane + 1))
+    }
+
     private let rowHeight: CGFloat = 90
 
     var body: some View {
@@ -318,7 +323,7 @@ private struct WeekRowView: View {
                             calendarYear: calendarYear,
                             isToday: key == todayKey,
                             monthLabel: monthStartLabels[key],
-                            activeBarsCount: weekData.activeBarsByDateKey[key] ?? 0,
+                            visibleWeekBarRows: visibleWeekBarRows,
                             shortEvents: weekData.shortEventsByDateKey[key] ?? [],
                             overflowBars: weekData.overflowBarsByDateKey[key] ?? 0,
                             barsTop: barsTop,
@@ -386,7 +391,7 @@ private struct DayCellView: View {
     let calendarYear: Int
     let isToday: Bool
     let monthLabel: MonthStartLabel?
-    let activeBarsCount: Int
+    let visibleWeekBarRows: Int
     let shortEvents: [CalendarEvent]
     let overflowBars: Int
     let barsTop: CGFloat
@@ -401,16 +406,13 @@ private struct DayCellView: View {
     }
 
     private var timedEventsOffset: CGFloat {
-        if activeBarsCount >= 3 {
-            return 42
+        if visibleWeekBarRows <= 0 {
+            return 6
         }
-        if activeBarsCount == 2 {
-            return 30
-        }
-        if activeBarsCount == 1 {
-            return 18
-        }
-        return 6
+
+        // Reserve space below all visible all-day lanes for this week
+        // so timed events stay horizontally aligned and never overlap bars.
+        return CGFloat(visibleWeekBarRows) * 18 + 4
     }
 
     var body: some View {
