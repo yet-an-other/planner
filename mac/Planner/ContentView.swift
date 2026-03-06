@@ -41,11 +41,7 @@ struct ContentView: View {
                     header
                         .padding(.horizontal, 8)
                         .padding(.top, 6)
-                        .padding(.bottom, 4)
-
-                    stateMessages
-                        .padding(.horizontal, 10)
-                        .padding(.bottom, 4)
+                        .padding(.bottom, 1)
 
                     Divider()
                         .overlay(Color.black.opacity(0.10))
@@ -103,7 +99,7 @@ struct ContentView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 1) {
             HStack(alignment: .top, spacing: 8) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("The Planner")
@@ -136,85 +132,133 @@ struct ContentView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.top, -4)
 
-                Group {
-                    if viewModel.authStatus == .authenticated {
-                        Button {
-                            viewModel.signOut()
-                        } label: {
-                            HStack(spacing: 6) {
-                                profileAvatar(url: viewModel.profilePictureURL)
-                                Text(viewModel.userLabel)
-                                    .lineLimit(1)
-                                Image(systemName: "rectangle.portrait.and.arrow.right")
+                VStack(alignment: .trailing, spacing: 4) {
+                    Group {
+                        if viewModel.authStatus == .authenticated {
+                            Button {
+                                viewModel.signOut()
+                            } label: {
+                                HStack(spacing: 6) {
+                                    profileAvatar(url: viewModel.profilePictureURL)
+                                    Text(viewModel.userLabel)
+                                        .lineLimit(1)
+                                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                                }
+                                .font(.system(size: 12, weight: .medium))
+                                .padding(.horizontal, 6)
+                                .frame(height: 34)
+                                .background(Color.white.opacity(0.85), in: Capsule())
+                                .overlay(
+                                    Capsule().stroke(Color.black.opacity(0.12), lineWidth: 1)
+                                )
                             }
-                            .font(.system(size: 12, weight: .medium))
-                            .padding(.horizontal, 6)
-                            .frame(height: 34)
-                            .background(Color.white.opacity(0.85), in: Capsule())
-                            .overlay(
-                                Capsule().stroke(Color.black.opacity(0.12), lineWidth: 1)
-                            )
-                        }
-                        .buttonStyle(.plain)
-                    } else {
-                        Button {
-                            viewModel.signIn()
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "person.crop.circle.badge.plus")
-                                Text(viewModel.authStatus == .loading ? "Signing in..." : "Sign in")
+                            .buttonStyle(.plain)
+                        } else {
+                            Button {
+                                viewModel.signIn()
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "person.crop.circle.badge.plus")
+                                    Text(viewModel.authStatus == .loading ? "Signing in..." : "Sign in")
+                                }
+                                .font(.system(size: 12, weight: .medium))
+                                .padding(.horizontal, 10)
+                                .frame(height: 36)
+                                .background(Color.white.opacity(0.85), in: Capsule())
+                                .overlay(
+                                    Capsule().stroke(Color.black.opacity(0.12), lineWidth: 1)
+                                )
                             }
-                            .font(.system(size: 12, weight: .medium))
-                            .padding(.horizontal, 10)
-                            .frame(height: 36)
-                            .background(Color.white.opacity(0.85), in: Capsule())
-                            .overlay(
-                                Capsule().stroke(Color.black.opacity(0.12), lineWidth: 1)
-                            )
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .trailing)
             }
 
-            if viewModel.authStatus != .authenticated {
-                Text("Sign in with Google to load your calendar events.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color.black.opacity(0.50))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-            }
+            headerSupportingLine
         }
         .frame(maxWidth: .infinity)
     }
 
-    private var stateMessages: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if let authError = viewModel.authError, !authError.isEmpty {
-                Text(authError)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.red)
-            }
-
-            if let fetchError = viewModel.fetchError, !fetchError.isEmpty {
-                Text(fetchError)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.red)
-            }
-
-            if viewModel.loadingEvents {
+    private var headerSupportingLine: some View {
+        HStack(spacing: 8) {
+            if let message = stateMessage {
                 HStack(spacing: 6) {
-                    ProgressView()
-                        .controlSize(.mini)
-                    Text("Loading events...")
+                    if message.showsSpinner {
+                        ProgressView()
+                            .controlSize(.mini)
+                    }
+
+                    Text(message.text)
                         .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(message.color)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                Spacer(minLength: 0)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            if viewModel.authStatus == .authenticated {
+                refreshStatusIndicator
+            } else {
+                Text("Sign in with Google to load your calendar events.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.black.opacity(0.50))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .offset(y: -2)
+        .frame(maxWidth: .infinity, minHeight: 12, alignment: .leading)
+    }
+
+    private var stateMessage: (text: String, color: Color, showsSpinner: Bool)? {
+        if let authError = viewModel.authError, !authError.isEmpty {
+            return (authError, .red, false)
+        }
+
+        if let fetchError = viewModel.fetchError, !fetchError.isEmpty {
+            return (fetchError, .red, false)
+        }
+
+        if viewModel.loadingEvents {
+            return ("Loading events...", .secondary, true)
+        }
+
+        return nil
+    }
+
+    @ViewBuilder
+    private var refreshStatusIndicator: some View {
+        switch viewModel.refreshState {
+        case .success:
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(Color(red: 0.21, green: 0.52, blue: 0.24))
+                    .frame(width: 6, height: 6)
+                Text("Synced")
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Color(red: 0.17, green: 0.42, blue: 0.20))
+            }
+        case .offline:
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(Color(red: 0.78, green: 0.31, blue: 0.18))
+                    .frame(width: 6, height: 6)
+                Text("Offline")
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Color(red: 0.62, green: 0.24, blue: 0.14))
+            }
+        case .unknown:
+            Color.clear
+                .frame(width: 1, height: 11)
+        }
     }
 
     private func headerButton(systemName: String, action: @escaping () -> Void) -> some View {
