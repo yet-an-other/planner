@@ -9,7 +9,7 @@ struct MonthStartLabel {
     let short: String
 }
 
-struct CalendarEvent: Identifiable, Hashable {
+struct CalendarEvent: Identifiable, Hashable, Codable {
     let id: String
     let summary: String
     let description: String

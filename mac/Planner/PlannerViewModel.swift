@@ -10,6 +10,12 @@ final class PlannerViewModel: ObservableObject {
         case unauthenticated
     }
 
+    enum RefreshState {
+        case unknown
+        case success
+        case offline
+    }
+
     @Published var authStatus: AuthStatus = .unauthenticated
     @Published var authError: String?
     @Published var fetchError: String?
@@ -18,6 +24,8 @@ final class PlannerViewModel: ObservableObject {
     @Published var events: [CalendarEvent] = []
     @Published var selectedEvent: CalendarEvent?
     @Published var calendarYear: Int = Calendar.current.component(.year, from: Date())
+    @Published var refreshState: RefreshState = .unknown
+    @Published var lastSuccessfulRefreshAt: Date?
 
     private static let autoRefreshIntervalSeconds: UInt64 = 60
 
@@ -94,6 +102,7 @@ final class PlannerViewModel: ObservableObject {
     private func performSignIn() async {
         authStatus = .loading
         authError = nil
+        refreshState = .unknown
 
         do {
             let nextSession = try await oauthService.signIn()
@@ -120,6 +129,10 @@ final class PlannerViewModel: ObservableObject {
             return
         }
 
+        if let cachedEvents = authStore.loadEvents(forYear: calendarYear), !cachedEvents.isEmpty {
+            events = cachedEvents
+        }
+
         loadingEvents = true
         fetchError = nil
 
@@ -131,16 +144,19 @@ final class PlannerViewModel: ObservableObject {
                 calendarID: GoogleConfig.calendarID
             )
             events = fetched
+            authStore.saveEvents(fetched, forYear: calendarYear)
+            markRefreshSuccess()
             loadingEvents = false
         } catch CalendarError.sessionExpired {
             await retryLoadEventsAfterUnauthorized()
         } catch {
             loadingEvents = false
-            events = []
             if error is SessionPersistenceError || error is OAuthError {
                 clearAuthenticationState(
                     errorMessage: (error as? LocalizedError)?.errorDescription ?? "Google session expired. Please sign in again."
                 )
+            } else if isOfflineError(error) {
+                applyOfflineFallback(forYear: calendarYear)
             } else {
                 fetchError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             }
@@ -157,6 +173,12 @@ final class PlannerViewModel: ObservableObject {
         fetchError = nil
         session = savedSession
         profile = authStore.loadProfile()
+        lastSuccessfulRefreshAt = authStore.loadLastSuccessfulRefresh()
+        refreshState = lastSuccessfulRefreshAt == nil ? .unknown : .success
+
+        if let cachedEvents = authStore.loadEvents(forYear: calendarYear) {
+            events = cachedEvents
+        }
 
         do {
             let activeSession = try await sessionForCalendarRequests()
@@ -171,7 +193,18 @@ final class PlannerViewModel: ObservableObject {
             startAutoRefreshIfNeeded()
             await loadEvents()
         } catch {
-            clearAuthenticationState(errorMessage: nil)
+            if isOfflineError(error) {
+                authStatus = .authenticated
+                refreshState = .offline
+                startAutoRefreshIfNeeded()
+                if let cachedEvents = authStore.loadEvents(forYear: calendarYear) {
+                    events = cachedEvents
+                } else {
+                    events = []
+                }
+            } else {
+                clearAuthenticationState(errorMessage: nil)
+            }
         }
     }
 
@@ -184,14 +217,19 @@ final class PlannerViewModel: ObservableObject {
                 calendarID: GoogleConfig.calendarID
             )
             events = fetched
+            authStore.saveEvents(fetched, forYear: calendarYear)
+            markRefreshSuccess()
             loadingEvents = false
             fetchError = nil
         } catch {
             loadingEvents = false
-            events = []
-            clearAuthenticationState(
-                errorMessage: (error as? LocalizedError)?.errorDescription ?? "Google session expired. Please sign in again."
-            )
+            if isOfflineError(error) {
+                applyOfflineFallback(forYear: calendarYear)
+            } else {
+                clearAuthenticationState(
+                    errorMessage: (error as? LocalizedError)?.errorDescription ?? "Google session expired. Please sign in again."
+                )
+            }
         }
     }
 
@@ -231,7 +269,53 @@ final class PlannerViewModel: ObservableObject {
         fetchError = nil
         authError = errorMessage
         authStatus = .unauthenticated
+        refreshState = .unknown
+        lastSuccessfulRefreshAt = nil
         authStore.clear()
+    }
+
+    private func markRefreshSuccess() {
+        let refreshDate = Date()
+        lastSuccessfulRefreshAt = refreshDate
+        refreshState = .success
+        authStore.saveLastSuccessfulRefresh(refreshDate)
+    }
+
+    private func applyOfflineFallback(forYear year: Int) {
+        let cachedEvents = authStore.loadEvents(forYear: year) ?? []
+        events = cachedEvents
+        refreshState = .offline
+        if cachedEvents.isEmpty {
+            fetchError = "Offline. No cached events are available for this year."
+        } else {
+            fetchError = "Offline. Showing last loaded events."
+        }
+    }
+
+    private func isOfflineError(_ error: Error) -> Bool {
+        let offlineCodes: Set<URLError.Code> = [
+            .notConnectedToInternet,
+            .networkConnectionLost,
+            .cannotConnectToHost,
+            .cannotFindHost,
+            .dnsLookupFailed,
+            .timedOut,
+            .internationalRoamingOff,
+            .callIsActive,
+            .dataNotAllowed
+        ]
+
+        if let urlError = error as? URLError {
+            return offlineCodes.contains(urlError.code)
+        }
+
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain {
+            let code = URLError.Code(rawValue: nsError.code)
+            return offlineCodes.contains(code)
+        }
+
+        return false
     }
 
     private func configureLifecycleObservers() {
@@ -333,6 +417,8 @@ private struct PersistedAuthStore {
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
     private let profileKey = "planner.google.user.profile"
+    private let eventsByYearKey = "planner.google.events.byYear"
+    private let lastSuccessfulRefreshKey = "planner.google.events.lastSuccessfulRefresh"
     private let keychainService = Bundle.main.bundleIdentifier.map { "\($0).auth" } ?? "planner.auth"
     private let keychainAccount = "google.auth.session"
 
@@ -387,9 +473,43 @@ private struct PersistedAuthStore {
         return try? decoder.decode(GoogleUserProfile.self, from: data)
     }
 
+    func saveEvents(_ events: [CalendarEvent], forYear year: Int) {
+        var cache = loadEventsByYear()
+        cache[String(year)] = events
+
+        guard let data = try? encoder.encode(cache) else {
+            return
+        }
+
+        UserDefaults.standard.set(data, forKey: eventsByYearKey)
+    }
+
+    func loadEvents(forYear year: Int) -> [CalendarEvent]? {
+        loadEventsByYear()[String(year)]
+    }
+
+    func saveLastSuccessfulRefresh(_ value: Date) {
+        UserDefaults.standard.set(value, forKey: lastSuccessfulRefreshKey)
+    }
+
+    func loadLastSuccessfulRefresh() -> Date? {
+        UserDefaults.standard.object(forKey: lastSuccessfulRefreshKey) as? Date
+    }
+
     func clear() {
         UserDefaults.standard.removeObject(forKey: profileKey)
+        UserDefaults.standard.removeObject(forKey: eventsByYearKey)
+        UserDefaults.standard.removeObject(forKey: lastSuccessfulRefreshKey)
         SecItemDelete(keychainBaseQuery as CFDictionary)
+    }
+
+    private func loadEventsByYear() -> [String: [CalendarEvent]] {
+        guard let data = UserDefaults.standard.data(forKey: eventsByYearKey),
+              let decoded = try? decoder.decode([String: [CalendarEvent]].self, from: data) else {
+            return [:]
+        }
+
+        return decoded
     }
 
     private var keychainBaseQuery: [String: Any] {
