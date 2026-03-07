@@ -52,8 +52,8 @@
 	<string>675461856342-mmqdivbqdiolrdhbvg83ldshuo3l674f.apps.googleusercontent.com</string>
 	<key>GOOGLE_OAUTH_REDIRECT_URI</key>
 	<string>com.googleusercontent.apps.675461856342-mmqdivbqdiolrdhbvg83ldshuo3l674f:/oauth2redirect</string>
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
+	<key>LSApplicationCategoryType</key>
+	<string></string>
 	<key>GOOGLE_CALENDAR_ID</key>
 	<string>primary</string>
 </dict>
