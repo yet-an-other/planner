@@ -36,6 +36,8 @@ final class PlannerViewModel: ObservableObject {
     private var appIsActive = true
     private var lifecycleObservers: [NSObjectProtocol] = []
     private var autoRefreshTask: Task<Void, Never>?
+    private var requestedLoadYear: Int?
+    private var processingRequestedLoads = false
 
     init() {
         configureLifecycleObservers()
@@ -90,13 +92,10 @@ final class PlannerViewModel: ObservableObject {
     }
 
     func loadEventsIfAuthenticated() {
-        guard session != nil, !loadingEvents else {
+        guard session != nil else {
             return
         }
-
-        Task {
-            await loadEvents()
-        }
+        requestEventsLoad(forYear: calendarYear)
     }
 
     private func performSignIn() async {
@@ -114,7 +113,7 @@ final class PlannerViewModel: ObservableObject {
             authStore.saveProfile(nextProfile)
             authStatus = .authenticated
             startAutoRefreshIfNeeded()
-            await loadEvents()
+            requestEventsLoad(forYear: calendarYear)
         } catch {
             clearAuthenticationState(
                 errorMessage: (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
@@ -122,42 +121,68 @@ final class PlannerViewModel: ObservableObject {
         }
     }
 
-    private func loadEvents() async {
-        guard session != nil else {
-            events = []
-            loadingEvents = false
+    private func requestEventsLoad(forYear year: Int) {
+        requestedLoadYear = year
+        applyVisibleEventsSnapshot(forYear: year)
+
+        guard !processingRequestedLoads else {
             return
         }
 
-        if let cachedEvents = authStore.loadEvents(forYear: calendarYear), !cachedEvents.isEmpty {
-            events = cachedEvents
+        Task {
+            await processRequestedLoads()
+        }
+    }
+
+    private func processRequestedLoads() async {
+        guard !processingRequestedLoads else {
+            return
         }
 
+        processingRequestedLoads = true
         loadingEvents = true
-        fetchError = nil
+        defer {
+            processingRequestedLoads = false
+            loadingEvents = false
+        }
+
+        while let year = requestedLoadYear, session != nil {
+            requestedLoadYear = nil
+            await loadEvents(forYear: year)
+        }
+    }
+
+    private func loadEvents(forYear year: Int) async {
+        guard session != nil else {
+            events = []
+            return
+        }
 
         do {
             let activeSession = try await sessionForCalendarRequests()
             let fetched = try await calendarService.getEventsForYear(
-                year: calendarYear,
+                year: year,
                 accessToken: activeSession.accessToken,
                 calendarID: GoogleConfig.calendarID
             )
-            events = fetched
-            authStore.saveEvents(fetched, forYear: calendarYear)
+            authStore.saveEvents(fetched, forYear: year)
+            if shouldApplyLoadResult(forYear: year) {
+                events = fetched
+                fetchError = nil
+            }
             markRefreshSuccess()
-            loadingEvents = false
         } catch CalendarError.sessionExpired {
-            await retryLoadEventsAfterUnauthorized()
+            await retryLoadEventsAfterUnauthorized(forYear: year)
         } catch {
-            loadingEvents = false
             if error is SessionPersistenceError || error is OAuthError {
                 clearAuthenticationState(
                     errorMessage: (error as? LocalizedError)?.errorDescription ?? "Google session expired. Please sign in again."
                 )
             } else if isOfflineError(error) {
-                applyOfflineFallback(forYear: calendarYear)
-            } else {
+                if shouldApplyLoadResult(forYear: year) {
+                    applyOfflineFallback(forYear: year)
+                }
+            } else if shouldApplyLoadResult(forYear: year) {
                 fetchError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             }
         }
@@ -191,7 +216,7 @@ final class PlannerViewModel: ObservableObject {
 
             authStatus = .authenticated
             startAutoRefreshIfNeeded()
-            await loadEvents()
+            requestEventsLoad(forYear: calendarYear)
         } catch {
             if isOfflineError(error) {
                 authStatus = .authenticated
@@ -208,24 +233,26 @@ final class PlannerViewModel: ObservableObject {
         }
     }
 
-    private func retryLoadEventsAfterUnauthorized() async {
+    private func retryLoadEventsAfterUnauthorized(forYear year: Int) async {
         do {
             let refreshedSession = try await sessionForCalendarRequests(forceRefresh: true)
             let fetched = try await calendarService.getEventsForYear(
-                year: calendarYear,
+                year: year,
                 accessToken: refreshedSession.accessToken,
                 calendarID: GoogleConfig.calendarID
             )
-            events = fetched
-            authStore.saveEvents(fetched, forYear: calendarYear)
+            authStore.saveEvents(fetched, forYear: year)
+            if shouldApplyLoadResult(forYear: year) {
+                events = fetched
+                fetchError = nil
+            }
             markRefreshSuccess()
-            loadingEvents = false
-            fetchError = nil
         } catch {
-            loadingEvents = false
             if isOfflineError(error) {
-                applyOfflineFallback(forYear: calendarYear)
-            } else {
+                if shouldApplyLoadResult(forYear: year) {
+                    applyOfflineFallback(forYear: year)
+                }
+            } else if shouldApplyLoadResult(forYear: year) {
                 clearAuthenticationState(
                     errorMessage: (error as? LocalizedError)?.errorDescription ?? "Google session expired. Please sign in again."
                 )
@@ -279,6 +306,15 @@ final class PlannerViewModel: ObservableObject {
         lastSuccessfulRefreshAt = refreshDate
         refreshState = .success
         authStore.saveLastSuccessfulRefresh(refreshDate)
+    }
+
+    private func applyVisibleEventsSnapshot(forYear year: Int) {
+        events = authStore.loadEvents(forYear: year) ?? []
+        fetchError = nil
+    }
+
+    private func shouldApplyLoadResult(forYear year: Int) -> Bool {
+        calendarYear == year
     }
 
     private func applyOfflineFallback(forYear year: Int) {
@@ -395,7 +431,7 @@ final class PlannerViewModel: ObservableObject {
             return
         }
 
-        await loadEvents()
+        requestEventsLoad(forYear: calendarYear)
     }
 }
 
