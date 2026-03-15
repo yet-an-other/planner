@@ -106,7 +106,7 @@ struct ContentView: View {
                         .font(.system(size: 11, weight: .semibold, design: .rounded))
                         .foregroundStyle(Color(red: 0.25, green: 0.30, blue: 0.24))
                         .textCase(.uppercase)
-                    Text("sha-\(appVersionTag)")
+                    Text(appVersionTag)
                         .font(.system(size: 9, weight: .regular, design: .monospaced))
                         .foregroundStyle(Color.black.opacity(0.45))
                 }
