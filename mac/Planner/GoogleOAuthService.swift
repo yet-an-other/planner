@@ -1,6 +1,7 @@
 import AuthenticationServices
 import CryptoKit
 import Foundation
+import OSLog
 import Security
 import UIKit
 
@@ -54,6 +55,14 @@ enum GoogleConfig {
         return scheme
     }
 
+    static var registeredURLSchemes: [String] {
+        let types = Bundle.main.object(forInfoDictionaryKey: "CFBundleURLTypes") as? [[String: Any]] ?? []
+        return types
+            .flatMap { $0["CFBundleURLSchemes"] as? [String] ?? [] }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
     static func validate() throws {
         if clientID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             throw OAuthError.configuration("Set GOOGLE_CLIENT_ID in Planner/Info.plist.")
@@ -66,6 +75,10 @@ enum GoogleConfig {
         if callbackScheme.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             throw OAuthError.configuration("GOOGLE_OAUTH_REDIRECT_URI must include a custom URL scheme.")
         }
+
+        if !registeredURLSchemes.contains(callbackScheme) {
+            throw OAuthError.configuration("Register \(callbackScheme) in CFBundleURLSchemes for Google OAuth.")
+        }
     }
 
     private static func infoValue(_ key: String) -> String {
@@ -74,9 +87,14 @@ enum GoogleConfig {
 }
 
 final class GoogleOAuthService {
+    private let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "com.ivan-b.planner",
+        category: "google-oauth"
+    )
     private let presentationContextProvider = OAuthPresentationContextProvider()
     private var activeSession: ASWebAuthenticationSession?
 
+    @MainActor
     func signIn() async throws -> GoogleAuthSession {
         try GoogleConfig.validate()
 
@@ -102,11 +120,14 @@ final class GoogleOAuthService {
             throw OAuthError.configuration("Google OAuth URL could not be created.")
         }
 
+        logger.log("Starting Google Calendar connection flow.")
         let callbackURL = try await startWebAuthentication(url: authorizationURL, expectedState: state)
         guard let code = Self.queryValue(name: "code", in: callbackURL) else {
             if let oauthError = Self.queryValue(name: "error", in: callbackURL) {
+                logger.error("Google OAuth callback returned error: \(oauthError, privacy: .public)")
                 throw OAuthError.signInFailed("Google sign-in failed: \(oauthError.replacingOccurrences(of: "_", with: " ")).")
             }
+            logger.error("Google OAuth callback returned without an authorization code.")
             throw OAuthError.signInFailed("Google sign-in did not return an authorization code.")
         }
 
@@ -201,15 +222,26 @@ final class GoogleOAuthService {
         )
     }
 
+    @MainActor
     private func startWebAuthentication(url: URL, expectedState: String) async throws -> URL {
         try await withCheckedThrowingContinuation { continuation in
             let callbackScheme = GoogleConfig.callbackScheme
+
+            guard presentationContextProvider.hasPresentationAnchor else {
+                logger.error("No usable presentation anchor was available for Google OAuth.")
+                continuation.resume(throwing: OAuthError.signInFailed("Could not present Google sign-in. Please try again."))
+                return
+            }
 
             let session = ASWebAuthenticationSession(url: url, callbackURLScheme: callbackScheme) { [weak self] callbackURL, error in
                 self?.activeSession = nil
 
                 if let error {
-                    if (error as NSError).code == ASWebAuthenticationSessionError.canceledLogin.rawValue {
+                    let nsError = error as NSError
+                    self?.logger.error(
+                        "ASWebAuthenticationSession failed. domain=\(nsError.domain, privacy: .public) code=\(nsError.code)"
+                    )
+                    if nsError.code == ASWebAuthenticationSessionError.canceledLogin.rawValue {
                         continuation.resume(throwing: OAuthError.cancelled)
                     } else {
                         continuation.resume(throwing: error)
@@ -218,12 +250,14 @@ final class GoogleOAuthService {
                 }
 
                 guard let callbackURL else {
+                    self?.logger.error("Google OAuth completed without a callback URL.")
                     continuation.resume(throwing: OAuthError.signInFailed("Google sign-in returned no callback URL."))
                     return
                 }
 
                 guard let returnedState = Self.queryValue(name: "state", in: callbackURL),
                       returnedState == expectedState else {
+                    self?.logger.error("Google OAuth callback state did not match the expected state.")
                     continuation.resume(throwing: OAuthError.signInFailed("Google sign-in failed: invalid OAuth state."))
                     return
                 }
@@ -237,6 +271,7 @@ final class GoogleOAuthService {
 
             if !session.start() {
                 self.activeSession = nil
+                self.logger.error("ASWebAuthenticationSession.start() returned false.")
                 continuation.resume(throwing: OAuthError.signInFailed("Could not start Google sign-in."))
             }
         }
@@ -270,6 +305,7 @@ final class GoogleOAuthService {
 
         guard (200...299).contains(httpResponse.statusCode) else {
             let message = String(data: data, encoding: .utf8) ?? ""
+            logger.error("Google token exchange failed with status \(httpResponse.statusCode): \(message, privacy: .public)")
             throw OAuthError.network("Google token exchange failed (\(httpResponse.statusCode)). \(message)")
         }
 
@@ -348,12 +384,51 @@ private struct GoogleUserInfoResponse: Decodable {
 }
 
 private final class OAuthPresentationContextProvider: NSObject, ASWebAuthenticationPresentationContextProviding {
+    @MainActor
+    var hasPresentationAnchor: Bool {
+        currentPresentationAnchor() != nil
+    }
+
+    @MainActor
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        UIApplication.shared
+        currentPresentationAnchor() ?? ASPresentationAnchor()
+    }
+
+    @MainActor
+    private func currentPresentationAnchor() -> ASPresentationAnchor? {
+        let scenes = UIApplication.shared
             .connectedScenes
             .compactMap { $0 as? UIWindowScene }
-            .flatMap { $0.windows }
-            .first(where: { $0.isKeyWindow }) ?? ASPresentationAnchor()
+            .sorted { lhs, rhs in
+                rank(for: lhs.activationState) < rank(for: rhs.activationState)
+            }
+
+        for scene in scenes {
+            if let keyWindow = scene.windows.first(where: { $0.isKeyWindow }) {
+                return keyWindow
+            }
+
+            if let firstWindow = scene.windows.first {
+                return firstWindow
+            }
+        }
+
+        return nil
+    }
+
+    private func rank(for activationState: UIScene.ActivationState) -> Int {
+        switch activationState {
+        case .foregroundActive:
+            return 0
+        case .foregroundInactive:
+            return 1
+        case .background:
+            return 2
+        case .unattached:
+            return 3
+        @unknown default:
+            return 4
+        }
     }
 }
 

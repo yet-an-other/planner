@@ -191,7 +191,7 @@ export class GoogleCalendarClient {
 
   static fromEnv(env: GoogleCalendarEnv, accessToken: string): GoogleCalendarClient {
     if (!accessToken) {
-      throw new Error('Google access token is missing. Sign in again.')
+      throw new Error('Google access token is missing. Connect Google Calendar again.')
     }
 
     return new GoogleCalendarClient({

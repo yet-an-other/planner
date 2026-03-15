@@ -161,7 +161,7 @@ struct ContentView: View {
                             } label: {
                                 HStack(spacing: 6) {
                                     Image(systemName: "person.crop.circle.badge.plus")
-                                    Text(viewModel.authStatus == .loading ? "Signing in..." : "Sign in")
+                                    Text(viewModel.authStatus == .loading ? "Connecting..." : "Connect")
                                 }
                                 .font(.system(size: 12, weight: .medium))
                                 .padding(.horizontal, 10)
@@ -207,7 +207,7 @@ struct ContentView: View {
             if viewModel.authStatus == .authenticated {
                 refreshStatusIndicator
             } else {
-                Text("Sign in with Google to load your calendar events.")
+                Text("Connect Google Calendar to load your calendar events.")
                     .font(.system(size: 11))
                     .foregroundStyle(Color.black.opacity(0.50))
                     .lineLimit(1)

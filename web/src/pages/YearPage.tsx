@@ -209,7 +209,7 @@ export function YearPage() {
               >
                 <span className="inline-flex min-w-0 items-center gap-2">
                   <CircleUserRound className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                  <span className="truncate">{status === 'loading' ? 'Checking...' : 'Sign in'}</span>
+                  <span className="truncate">{status === 'loading' ? 'Connecting...' : 'Connect'}</span>
                 </span>
                 <span aria-hidden className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
               </button>
@@ -218,7 +218,7 @@ export function YearPage() {
             {authError ? <p className="text-[10px] text-rose-700 sm:text-xs">{authError}</p> : null}
             {status === 'unauthenticated' ? (
               <p className="text-[10px] text-slate-600 sm:text-xs">
-                Sign in with Google to load your calendar events.
+                Connect Google Calendar to load your calendar events.
               </p>
             ) : null}
             {fetchError ? <p className="text-[10px] text-rose-700 sm:text-xs">{fetchError}</p> : null}

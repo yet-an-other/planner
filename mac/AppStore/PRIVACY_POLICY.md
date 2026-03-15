@@ -6,18 +6,18 @@ Planner respects your privacy. This Privacy Policy explains what information the
 
 ## 1. Information Planner Accesses
 
-If you choose to sign in with Google, Planner requests access to:
+If you choose to connect Google Calendar, Planner requests access to:
 
 - Your basic Google account identity through the `openid`, `profile`, and `email` scopes
 - Your Google Calendar data through the `https://www.googleapis.com/auth/calendar.readonly` scope
 
-Planner uses this information only to sign you in, show your account information in the app, and display your calendar events.
+Planner uses this information only to connect your Google Calendar, show your account information in the app, and display your calendar events.
 
 ## 2. How Your Information Is Used
 
 Planner uses your information to:
 
-- authenticate your Google account
+- connect your Google account
 - load and refresh your calendar events
 - show your profile name, email address, and profile picture in the app
 - cache the most recently loaded events for offline viewing
@@ -32,13 +32,13 @@ Planner stores limited information on your device:
 - Google authentication session data is stored in the iOS Keychain
 - Your profile information, cached calendar events, and last refresh timestamp are stored locally in `UserDefaults`
 
-This local storage is used to keep you signed in and to support offline viewing of previously loaded events.
+This local storage is used to keep your Google Calendar connection active and to support offline viewing of previously loaded events.
 
 ## 4. Data Sharing
 
 Planner does not operate its own backend for the iOS app and does not send your calendar data to developer-owned servers.
 
-Your information is exchanged directly with Google services as part of sign-in and calendar loading, including:
+Your information is exchanged directly with Google services as part of calendar connection and event loading, including:
 
 - `accounts.google.com`
 - `oauth2.googleapis.com`

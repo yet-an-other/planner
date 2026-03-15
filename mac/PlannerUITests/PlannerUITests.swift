@@ -10,7 +10,7 @@ final class PlannerUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(app.staticTexts["Mon"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["Sign in"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Connect"].waitForExistence(timeout: 10))
 
         let screenshot = XCUIScreen.main.screenshot()
         let attachment = XCTAttachment(screenshot: screenshot)
