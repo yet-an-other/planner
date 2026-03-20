@@ -68,6 +68,12 @@ export function SupportPage() {
           <article className="rounded-[24px] border border-[#c8d2bb] bg-white/90 p-6 shadow-sm">
             <h2 className="font-display text-xl text-[#20271b]">Additional links</h2>
             <div className="mt-4 flex flex-col gap-3 text-sm">
+              <Link
+                className="inline-flex w-fit items-center rounded-full border border-[#aab69b] bg-[#f7f9f2] px-4 py-2 font-medium text-[#2b3525] transition hover:bg-white"
+                to="/terms"
+              >
+                Terms of Service
+              </Link>
               <a
                 className="inline-flex w-fit items-center rounded-full border border-[#aab69b] bg-[#f7f9f2] px-4 py-2 font-medium text-[#2b3525] transition hover:bg-white"
                 href="https://github.com/yet-an-other/planner/issues"
