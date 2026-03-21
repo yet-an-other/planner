@@ -52,12 +52,20 @@ export function PrivacyPage() {
           </p>
 
           <div className="mt-8">
-            <Link
-              className="inline-flex items-center rounded-full border border-[#aab69b] bg-[#f7f9f2] px-4 py-2 font-medium text-[#2b3525] transition hover:bg-white"
-              to="/support"
-            >
-              Back to support
-            </Link>
+            <div className="flex flex-wrap gap-3">
+              <Link
+                className="inline-flex items-center rounded-full border border-[#aab69b] bg-[#f7f9f2] px-4 py-2 font-medium text-[#2b3525] transition hover:bg-white"
+                to="/terms"
+              >
+                Read Terms
+              </Link>
+              <Link
+                className="inline-flex items-center rounded-full border border-[#aab69b] bg-[#f7f9f2] px-4 py-2 font-medium text-[#2b3525] transition hover:bg-white"
+                to="/support"
+              >
+                Back to support
+              </Link>
+            </div>
           </div>
         </article>
       </div>
