@@ -2,7 +2,7 @@ replicaCount: 3
 
 image:
   repository: ilaverlin/planner
-  tag: sha-5fdccc1
+  tag: sha-0604908
   pullPolicy: IfNotPresent
 
 service:
